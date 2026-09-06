@@ -87,11 +87,32 @@ declarado **antes** dos treinos.
 08_onnx_optimization →  otimiza o modelo promovido
 ```
 
-**Critério:** maior **F1-macro** no teste, entre os modelos que respeitam um recall mínimo
-da classe `urgente` e um teto de latência p95. A regra vive em `src/evaluation/promotion.py`
-e é consultada pelo notebook, pela DAG e pela API — nunca reimplementada.
+**Critério:** maior **F1-macro** no teste, entre os modelos com recall de `urgente` ≥ 0,60
+e latência p95 ≤ 15 ms. A regra vive em `src/evaluation/promotion.py` e é consultada pelo
+notebook, pela DAG e pela API — nunca reimplementada.
 
-> 📄 Métricas, protocolo de medição de latência e checklist em
+### Resultado
+
+Corpus real: 11.227 documentos (14.438 brutos, 22,2% duplicatas removidas).
+
+| Modelo | F1-macro | Recall `urgente` | p95 | Tamanho | |
+|---|---|---|---|---|---|
+| **tfidf_linear_svc** | **0,7582** | 0,8118 | 3,14 ms | 1,23 MB | ✅ promovido |
+| tfidf_logreg | 0,7489 | 0,7957 | 3,22 ms | 1,23 MB | elegível |
+| tfidf_random_forest | 0,7273 | 0,8414 | 210,63 ms | 72,17 MB | ❌ latência |
+| dummy_stratified | 0,3388 | 0,2339 | 5,13 ms | — | piso |
+| dummy_most_frequent | 0,1951 | 0,0000 | 2,71 ms | — | piso |
+
+Três leituras que a comparação sustenta:
+
+- **A acurácia teria escolhido o pior modelo.** O `most_frequent` tem a maior acurácia
+  entre os baselines (0,4136) e nunca prediz `urgente`
+- **O Random Forest sugerido no enunciado perdeu nos dois eixos**: F1-macro menor, 67x
+  mais lento e 59x maior que os lineares
+- **SVC e LogReg empataram tecnicamente** (Δ 0,0093); o desempate por latência teve
+  margem de 0,07 ms, que é ruído — [decisão em aberto](docs/MODEL_CARD.md#-decisão-em-aberto)
+
+> 📄 Análise completa em **[docs/MODEL_CARD.md](docs/MODEL_CARD.md)** · metodologia em
 > **[docs/NOTEBOOKS.md](docs/NOTEBOOKS.md)**.
 
 ---
@@ -112,41 +133,69 @@ e é consultada pelo notebook, pela DAG e pela API — nunca reimplementada.
 
 ---
 
-## 📂 Estrutura do Repositório (planejada)
+## 📂 Estrutura do Repositório
 
 ```
 tc03-cloud-mlops/
-├── .github/workflows/       # Pipelines de CI/CD
-├── airflow/dags/            # DAG de treino/retreino
-├── api/                     # Serviço FastAPI
+├── configs/
+│   └── model_config.yaml    # ✅ Seed, splits, mapeamento, grades e limiares
 ├── data/                    # Dados (raw/processed) — não versionados
-├── docs/                    # Documentação do projeto
-├── models/                  # Artefatos de modelo (.pkl / .onnx)
-├── monitoring/              # Configs Prometheus e dashboards Grafana
-├── notebooks/               # Exploração, modelos candidatos e comparação
-├── src/                     # Código de treino, features e avaliação
-│   ├── evaluation/          # Métricas e regra de promoção do modelo
-│   └── pipeline/            # Etapas chamadas pela DAG do Airflow
+├── docs/                    # ✅ Documentação do projeto
+├── models/                  # Artefatos de modelo — não versionados
+├── notebooks/               # ✅ EDA, candidatos e comparação (01 a 07)
+├── scripts/
+│   └── gen_synthetic_data.py # ✅ Corpus sintético para pipeline e CI
+├── src/
+│   ├── config.py            # ✅ Caminhos, seed e carregamento de config
+│   ├── data/                # ✅ Loader, limpeza, mapeamento e splits
+│   ├── evaluation/          # ✅ Métricas, latência e regra de promoção
+│   └── models/              # ✅ Pipelines dos candidatos e rotina de experimento
 ├── tests/                   # Testes automatizados (pytest)
-├── docker-compose.yml       # API + Prometheus + Grafana
-└── Dockerfile               # Imagem do serviço de inferência
+├── .github/workflows/       # ⬜ Pipelines de CI/CD (Etapa 2)
+├── airflow/dags/            # ⬜ DAG de treino/retreino (Etapa 2)
+├── api/                     # ⬜ Serviço FastAPI (Etapa 1)
+├── monitoring/              # ⬜ Prometheus e dashboards Grafana (Etapa 3)
+├── docker-compose.yml       # ⬜ API + Prometheus + Grafana (Etapa 3)
+└── Dockerfile               # ⬜ Imagem do serviço de inferência (Etapa 1)
 ```
 
-> ⚠️ Nenhum diretório de código foi criado ainda. Esta é a estrutura-alvo definida na
-> documentação inicial e será construída ao longo das etapas.
+**Legenda:** ✅ existe · ⬜ a construir na etapa indicada
 
 ---
 
 ## 🚀 Como Executar
 
-> 🚧 **Em construção.** As instruções abaixo serão preenchidas conforme as etapas forem
-> implementadas. Elas fazem parte do critério de avaliação de Documentação (15%).
+### Seleção do modelo (notebooks)
 
 ```bash
-# 1. Subir a stack completa (API + Prometheus + Grafana)
-docker compose up -d
+# 1. Dependências
+uv sync --group dev            # ou: pip install -e ".[dev]"
 
-# 2. Endpoints previstos
+# 2. Dados
+#    Baixe o corpus para data/raw/ — ver docs/DATASET.md
+#    Sem o corpus ainda? Gere um substituto sintético:
+python scripts/gen_synthetic_data.py --rows 3000
+
+# 3. Rode os notebooks na ordem
+jupyter lab notebooks/
+```
+
+| Ordem | Notebook | O que faz |
+|-------|----------|-----------|
+| 1 | `01_eda.ipynb` | Explora o corpus e grava `data_profile.json` |
+| 2 | `02_preprocessing.ipynb` | Mapeia urgência e gera os splits — **roda uma vez só** |
+| 3 | `03_baseline_dummy.ipynb` | Piso de comparação |
+| 4-6 | `04` · `05` · `06` | Candidatos: LogReg, Random Forest, LinearSVC |
+| 7 | `07_model_comparison.ipynb` | Aplica o critério e promove o vencedor |
+
+> 📄 Detalhes em [docs/NOTEBOOKS.md](docs/NOTEBOOKS.md).
+
+### Stack de inferência
+
+> 🚧 **Etapas 1 e 3.** Ainda não implementada.
+
+```bash
+docker compose up -d
 # API .......... http://localhost:8000/docs
 # Métricas ..... http://localhost:8000/metrics
 # Prometheus ... http://localhost:9090

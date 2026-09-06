@@ -3,6 +3,10 @@
 > Estrutura, propósito e ordem de execução dos notebooks que selecionam o modelo de
 > classificação de urgência de laudos médicos.
 
+> ✅ **Notebooks `01` a `07` executados**, com saídas salvas nos arquivos. Resultado
+> consolidado em [MODEL_CARD.md](MODEL_CARD.md) e resumido em
+> [Resultado da seleção](#-resultado-da-seleção).
+
 ---
 
 ## 🎯 Princípio Central
@@ -153,10 +157,21 @@ Etapa 4 não sustenta os 20% de Modelagem e Otimização.
 | Regra | Valor |
 |-------|-------|
 | Descartar chamadas de aquecimento | primeiras 50 |
-| Número de medições | ≥ 1.000 predições single-sample |
-| Reportar | p50, p95, p99 e média |
+| Número de medições | até 1.000 predições single-sample |
+| Orçamento de tempo | 45 s, respeitando um mínimo de 200 medições |
+| Reportar | p50, p95, p99, média e **número real de chamadas** |
 | Ambiente | mesma máquina, sem outras cargas |
 | Modo | uma amostra por chamada (é assim que a API vai receber) |
+
+Os parâmetros ficam em [`configs/model_config.yaml`](../configs/model_config.yaml), em
+`latency`.
+
+> ℹ️ **Por que existe orçamento de tempo.** Um Random Forest sobre TF-IDF pode passar de
+> 300 ms por chamada — 1.000 medições levariam mais de cinco minutos só para medir. O
+> orçamento corta isso sem enviesar o resultado: a precisão do percentil cai, o valor
+> esperado não muda. Por isso o número real de chamadas é reportado em
+> `latency_n_calls` e deve constar no Model Card — um p99 estimado com 200 amostras é
+> mais ruidoso que um com 1.000, e isso precisa estar visível.
 
 > ⚠️ Medir em lote (`predict` com 1.000 linhas de uma vez) e dividir por 1.000 **não** é
 > a latência da API. O batch amortiza custo que a requisição real paga integralmente.
@@ -202,13 +217,54 @@ Declarado **antes** de rodar os modelos:
 > **F1-macro** no split de teste. Empate técnico (diferença < 1 pp) é resolvido pelo
 > menor p95.
 
-| Parâmetro | Valor | Definido em |
-|-----------|-------|-------------|
-| Limiar de recall `urgente` | _a definir_ | Etapa 0, antes de treinar |
-| Teto de latência p95 | _a definir_ | Após o baseline da Etapa 1 |
+| Parâmetro | Valor | Onde |
+|-----------|-------|------|
+| Métrica de promoção | `f1_macro` | `configs/model_config.yaml` |
+| Limiar de recall `urgente` | 0,60 | `configs/model_config.yaml` |
+| Teto de latência p95 | 15 ms | `configs/model_config.yaml` |
+| Limiar de empate técnico | 0,01 | `src/evaluation/promotion.py` |
 
-> ⚠️ Os dois parâmetros precisam ser fixados **antes** do `07_model_comparison` rodar.
-> Ajustá-los depois de ver os resultados invalida o critério.
+> ⚠️ Os parâmetros foram fixados **antes** do `07_model_comparison` rodar. Ajustá-los
+> depois de ver os resultados invalidaria o critério — se for necessário revisá-los, a
+> mudança precisa ser registrada explicitamente e todos os modelos reavaliados.
+
+---
+
+## 🏆 Resultado da Seleção
+
+Execução sobre o corpus real (11.227 documentos, teste com 1.685).
+
+| Modelo | F1-macro | Recall `urgente` | p95 (ms) | Tamanho | Situação |
+|--------|----------|------------------|----------|---------|----------|
+| **tfidf_linear_svc** | **0,7582** | 0,8118 | 3,14 | 1,23 MB | ✅ **Promovido** |
+| tfidf_logreg | 0,7489 | 0,7957 | 3,22 | 1,23 MB | Elegível |
+| tfidf_random_forest | 0,7273 | 0,8414 | 210,63 | 72,17 MB | ❌ Excluído por latência |
+| dummy_stratified | 0,3388 | 0,2339 | 5,13 | 0,77 MB | ❌ Piso |
+| dummy_most_frequent | 0,1951 | 0,0000 | 2,71 | 0,77 MB | ❌ Piso |
+
+### O que a comparação mostrou
+
+**1. A acurácia teria escolhido o pior modelo.** O `dummy_most_frequent` tem acurácia
+0,4136 — maior que a do `dummy_stratified` (0,3579) — e **nunca prediz `urgente`**
+(recall 0,0000). É a justificativa empírica do F1-macro como métrica de promoção.
+
+**2. O Random Forest sugerido no enunciado perdeu nos dois eixos que importam.** F1-macro
+menor que os modelos lineares, **67x mais lento** (210,63 ms contra 3,14 ms) e **59x
+maior** (72,17 MB contra 1,23 MB). Ele só vence no recall de `urgente` (0,8414). O
+enunciado admite "Random Forest **ou modelo leve similar**" — agora há número medido para
+justificar a escolha em vez de segui-lo por inércia.
+
+**3. A promoção foi decidida por desempate, não por qualidade.** A diferença entre
+`tfidf_linear_svc` e `tfidf_logreg` é de 0,0093 em F1-macro — dentro do empate técnico. O
+desempate por p95 teve margem de 0,07 ms, que é ruído de medição. Os dois modelos são
+equivalentes; a regra apenas escolheu um de forma reproduzível. Ver a
+[decisão em aberto](MODEL_CARD.md#-decisão-em-aberto) sobre `predict_proba`.
+
+**4. Não houve overfitting na busca.** Nenhum candidato variou mais que ±0,008 de F1-macro
+entre validação e teste.
+
+**5. O erro clinicamente caro persiste.** 49 de 372 casos `urgente` (13,2%) foram
+classificados como `normal` pelo modelo promovido.
 
 ### 🔒 A regra vive em código, não no notebook
 

@@ -13,9 +13,66 @@
 | [1 — Arquitetura e API](#-etapa-1--decisão-arquitetural-e-api-inicial) | Deploy em Nuvem | 15% (doc) | ⬜ Não iniciada |
 | [2 — CI/CD e Pipeline](#-etapa-2--cicd-e-pipeline-automatizado) | CI/CD e Pipeline de Treino | 30% | ⬜ Não iniciada |
 | [3 — Monitoramento](#-etapa-3--monitoramento-e-observabilidade) | Monitoração de Performance | 20% | ⬜ Não iniciada |
-| [4 — Otimização e Entrega](#-etapa-4--otimização-de-latência-e-entrega) | Latência em Modelos Não Estruturados | 35% | ⬜ Não iniciada |
+| [4 — Otimização e Entrega](#-etapa-4--otimização-de-latência-e-entrega) | Latência em Modelos Não Estruturados | 35% | 🟡 Modelo selecionado; otimização pendente |
 
 **Legenda:** ⬜ não iniciada · 🟡 em andamento · ✅ concluída · 🔴 bloqueada
+
+---
+
+## ✅ Conformidade com o Enunciado
+
+Conferência item a item do que o enunciado exige.
+
+### Requisitos obrigatórios — repositório
+
+| Requisito | Status | Onde |
+|-----------|--------|------|
+| Pipeline CI/CD com GitHub Actions (lint → test → build) | ⬜ | Etapa 2 |
+| Script ou DAG Airflow para treino/retreino | ⬜ | Etapa 2 |
+| Dockerfile funcional para o serviço de inferência | ⬜ | Etapa 1 |
+| Stack de monitoramento local (API + Prometheus + Grafana) | ⬜ | Etapa 3 |
+| Histórico de commits semântico e organizado | ✅ | [COMMITLINT.md](COMMITLINT.md) |
+
+### Bibliotecas requeridas
+
+| Biblioteca | Uso exigido | Status |
+|-----------|-------------|--------|
+| Scikit-Learn | Modelo base de classificação de texto | ✅ TF-IDF + LinearSVC / LogReg / RF |
+| FastAPI | Construção da API | ⬜ Etapa 1 |
+| Prometheus-client | Instrumentação de métricas | ⬜ Etapa 3 |
+| Airflow | Orquestração de tarefas | ⬜ Etapa 2 |
+
+### Boas práticas obrigatórias
+
+| Prática | Exigência | Status |
+|---------|-----------|--------|
+| CI/CD com ≥ 2 automações | lint + testes | ⬜ Etapa 2 |
+| DAG Airflow funcional | dados → treino → salvamento | ⬜ Etapa 2 |
+| Dashboard Grafana | ≥ 3 painéis | ⬜ Etapa 3 |
+| Otimização de performance | ≥ 1 técnica (ONNX, quantização ou pruning) | ⬜ Etapa 4 |
+
+### Dataset
+
+| Exigência | Situação |
+|-----------|----------|
+| Texto + target de classificação | ✅ `texto` + `urgencia` |
+| Mínimo de 2.000 amostras | ✅ **11.227** documentos utilizados |
+| Dataset público | ✅ Medical Abstracts TC Corpus |
+
+### Etapa 4 — o que a seleção de modelo já cobre
+
+| Tarefa do enunciado | Status |
+|--------------------|--------|
+| Treinar o classificador de texto | ✅ 5 candidatos comparados no mesmo split |
+| Aplicar técnica de otimização (ONNX / quantização) | ⬜ **Pendente** |
+| Comparar latência original × otimizado | ⬜ **Pendente** |
+| Gravar o vídeo STAR | ⬜ Pendente |
+
+> ⚠️ **Atenção ao critério "Modelagem e Otimização" (20%).** O enunciado exige *"modelo
+> funcional de NLP, conversão/otimização bem-sucedida e melhoria de latência
+> demonstrada"* — são **três** partes. O modelo funcional está entregue; a conversão e o
+> comparativo de latência, não. Sem o notebook `08`, esse critério fica parcialmente
+> atendido.
 
 ---
 
@@ -28,12 +85,13 @@
 - [x] Inicializar repositório e conectar ao remoto
 - [x] Definir padrão de commits ([COMMITLINT.md](COMMITLINT.md))
 - [x] Documentar contexto, arquitetura, roadmap e dataset
+- [x] Definir o dataset ([DATASET.md](DATASET.md)) — Medical Abstracts TC Corpus
+- [x] Fixar o limiar de recall `urgente` e o teto de latência p95 ([NOTEBOOKS.md](NOTEBOOKS.md))
+- [x] Criar a estrutura de diretórios descrita no README
+- [x] Adicionar `data/`, `models/` e saídas de notebook ao [.gitignore](../.gitignore)
 - [ ] Confirmar as decisões marcadas como 🟡 **Proposta** em [ARQUITETURA.md](ARQUITETURA.md)
-- [ ] Definir o dataset ([DATASET.md](DATASET.md))
-- [ ] Fixar o limiar de recall `urgente` e o teto de latência p95 ([NOTEBOOKS.md](NOTEBOOKS.md))
+- [ ] Revisar a regra de mapeamento de urgência ([DATASET.md](DATASET.md))
 - [ ] Preencher a tabela de equipe no README
-- [ ] Criar a estrutura de diretórios descrita no README
-- [ ] Adicionar `data/` ao [.gitignore](../.gitignore)
 
 ### 🧰 Arquivos de tooling a criar
 
@@ -159,9 +217,11 @@ Docker Compose rodando a stack completa + print/JSON do dashboard.
 
 ### Tarefas
 
-- [ ] Executar os notebooks `01` a `06` — EDA, splits e modelos candidatos
-- [ ] Rodar `07_model_comparison` e promover o vencedor pelo critério declarado
-- [ ] Registrar métricas de qualidade (F1-macro, recall por classe, matriz de confusão)
+- [x] Executar os notebooks `01` a `06` — EDA, splits e modelos candidatos
+- [x] Rodar `07_model_comparison` e promover o vencedor pelo critério declarado
+- [x] Registrar métricas de qualidade (F1-macro, recall por classe, matriz de confusão)
+- [ ] Decidir entre `tfidf_linear_svc` e `tfidf_logreg` ([MODEL_CARD.md](MODEL_CARD.md#-decisão-em-aberto))
+- [ ] Criar o notebook `08_onnx_optimization`
 - [ ] Aplicar técnica de otimização — **exportação para ONNX Runtime** (ou quantização)
 - [ ] Validar equivalência de predições entre `.pkl` e `.onnx`
 - [ ] Comparar latência: modelo original × modelo otimizado
