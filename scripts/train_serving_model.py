@@ -38,12 +38,15 @@ from src.models.experiment import run_candidate  # noqa: E402
 def preparar_dados() -> None:
     """Builds the train/val/test splits from the raw corpus."""
     presentes, ausentes = raw_files_present()
-    print(f"Arquivos brutos usados:  {', '.join(presentes)}")
-    if ausentes:
-        print(
-            f"AVISO: ausentes {', '.join(ausentes)} - as metricas vao diferir "
-            "de uma execucao com o corpus completo."
-        )
+    # Sem nenhum arquivo, quem explica o problema e a excecao de load_raw, que
+    # carrega o link do download. Avisar aqui so adicionaria ruido antes dela.
+    if presentes:
+        print(f"Arquivos brutos usados:  {', '.join(presentes)}")
+        if ausentes:
+            print(
+                f"AVISO: ausentes {', '.join(ausentes)} - as metricas vao diferir "
+                "de uma execucao com o corpus completo."
+            )
 
     raw = load_raw()
     print(f"Documentos brutos:      {len(raw):,}")
@@ -80,8 +83,9 @@ def main() -> None:
         except RawDataNotFoundError as erro:
             print(erro)
             print(
-                "\nSem o corpus, gere um substituto sintetico:\n"
-                "  python scripts/gen_synthetic_data.py --rows 3000"
+                "\nPara apenas validar a stack, gere um substituto sintetico:\n"
+                "  uv run python scripts/gen_synthetic_data.py --rows 3000\n"
+                "As metricas resultantes nao reproduzem as documentadas."
             )
             raise SystemExit(1) from erro
 

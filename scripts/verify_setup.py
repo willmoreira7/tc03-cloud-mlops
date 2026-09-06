@@ -109,9 +109,12 @@ def checar_dados(rel: Relatorio) -> None:
             "As metricas vao diferir de uma execucao com o corpus completo.",
         )
     else:
+        from src.data.loader import DATASET_URL
+
         rel.aviso(
             "Nenhum corpus em data/raw",
-            "Baixe o corpus (docs/DATASET.md) ou rode: "
+            f"Baixe o corpus em {DATASET_URL} e extraia os CSVs em data/raw/ "
+            "-- ou, para so validar a stack: "
             "uv run python scripts/gen_synthetic_data.py --rows 3000",
         )
 

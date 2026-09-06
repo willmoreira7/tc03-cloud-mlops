@@ -15,6 +15,8 @@ import pandas as pd
 
 from src.config import DATA_PROCESSED, DATA_RAW, load_config
 
+DATASET_URL = "https://www.kaggle.com/datasets/saharalaa/medical-abstracts-tc-corpus"
+
 TEXT_COLUMN = "texto"
 LABEL_COLUMN = "urgencia"
 
@@ -91,7 +93,8 @@ def load_raw() -> pd.DataFrame:
         raise RawDataNotFoundError(
             f"Nenhum arquivo bruto encontrado em {DATA_RAW}.\n"
             f"Esperado um destes: {expected}\n"
-            "Ver docs/DATASET.md para instrucoes de download."
+            f"Baixe o corpus em {DATASET_URL}\n"
+            "e extraia os CSVs em data/raw/ (ver docs/DATASET.md)."
         )
 
     raw = pd.concat(frames, ignore_index=True)

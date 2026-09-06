@@ -241,8 +241,11 @@ tc03-cloud-mlops/
 | **uv** | 0.5+ | Gerencia o ambiente Python e trava as versões | `pip install uv` ou [astral.sh/uv](https://docs.astral.sh/uv/getting-started/installation/) |
 | **Docker** | 24+ | Roda a API em container | [docs.docker.com/get-docker](https://docs.docker.com/get-docker/) |
 
+| **Dataset** | — | Corpus de laudos, não versionado | [Medical Abstracts TC Corpus](https://www.kaggle.com/datasets/saharalaa/medical-abstracts-tc-corpus) |
+
 O Python é instalado pelo próprio `uv` (versão fixada em `pyproject.toml`), não é preciso
-ter 3.12 no sistema.
+ter 3.12 no sistema. Baixe o dataset e extraia os CSVs (`medical_tc_train.csv` e
+`medical_tc_test.csv`) em `data/raw/` — ver [docs/DATASET.md](docs/DATASET.md).
 
 > ⚠️ **Todos os comandos abaixo usam `uv run`.** Isso executa dentro do ambiente do
 > projeto sem precisar ativar venv. Rodar `python ...` ou `jupyter ...` direto usaria o
@@ -264,8 +267,11 @@ uv run python scripts/verify_setup.py
 ### Seleção do modelo (notebooks)
 
 ```bash
-# 1. Dados: baixe o corpus para data/raw/ — ver docs/DATASET.md
-#    Sem o corpus ainda? Gere um substituto sintético:
+# 1. Baixe o corpus e extraia os CSVs em data/raw/
+#    https://www.kaggle.com/datasets/saharalaa/medical-abstracts-tc-corpus
+#
+#    Sem conta no Kaggle? Gere um substituto sintético — roda a stack inteira,
+#    mas as métricas não reproduzem as documentadas:
 uv run python scripts/gen_synthetic_data.py --rows 3000
 
 # 2. Rode os notebooks na ordem
@@ -290,7 +296,8 @@ uv run jupyter lab notebooks/
 > `FileNotFoundError: Artefato do modelo nao encontrado`.
 
 ```bash
-# 1. Dados: baixe o corpus para data/raw/ (ver docs/DATASET.md)
+# 1. Baixe o corpus e extraia os CSVs em data/raw/
+#    https://www.kaggle.com/datasets/saharalaa/medical-abstracts-tc-corpus
 #    ou, para apenas validar a stack:
 uv run python scripts/gen_synthetic_data.py --rows 3000
 
