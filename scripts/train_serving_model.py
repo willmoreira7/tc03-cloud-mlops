@@ -21,7 +21,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.config import DATA_PROCESSED, ensure_dirs, load_config, set_seed  # noqa: E402
-from src.data.loader import RawDataNotFoundError, load_raw  # noqa: E402
+from src.data.loader import (  # noqa: E402
+    RawDataNotFoundError,
+    load_raw,
+    raw_files_present,
+)
 from src.data.preprocessing import (  # noqa: E402
     class_distribution,
     drop_degenerate,
@@ -33,6 +37,14 @@ from src.models.experiment import run_candidate  # noqa: E402
 
 def preparar_dados() -> None:
     """Builds the train/val/test splits from the raw corpus."""
+    presentes, ausentes = raw_files_present()
+    print(f"Arquivos brutos usados:  {', '.join(presentes)}")
+    if ausentes:
+        print(
+            f"AVISO: ausentes {', '.join(ausentes)} - as metricas vao diferir "
+            "de uma execucao com o corpus completo."
+        )
+
     raw = load_raw()
     print(f"Documentos brutos:      {len(raw):,}")
 

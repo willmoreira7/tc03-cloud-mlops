@@ -51,6 +51,22 @@ def _resolve_column(frame: pd.DataFrame, configured: str, candidates: tuple) -> 
     )
 
 
+def raw_files_present() -> tuple[list[str], list[str]]:
+    """Lists which configured raw files exist and which are missing.
+
+    ``load_raw`` concatenates whatever it finds. Running with a subset of the
+    corpus therefore produces different splits and different metrics -- with no
+    error. Surfacing the file list is what keeps that difference visible.
+
+    Returns:
+        Tuple of (present filenames, missing filenames).
+    """
+    configured = load_config()["data"]["raw_files"]
+    present = [name for name in configured if (DATA_RAW / name).exists()]
+    missing = [name for name in configured if name not in present]
+    return present, missing
+
+
 def load_raw() -> pd.DataFrame:
     """Loads and concatenates every configured raw CSV.
 
