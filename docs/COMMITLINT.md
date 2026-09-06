@@ -12,7 +12,8 @@
 
 ## 🚀 Setup Inicial
 
-Se ainda não fez, execute:
+Requer Node.js. **Opcional** — valida mensagens de commit; não é
+necessário para rodar ou avaliar o projeto.
 
 ```bash
 npm install

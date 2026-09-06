@@ -316,12 +316,16 @@ curl -X POST http://localhost:8000/predict   -H "Content-Type: application/json"
 ```json
 {
   "urgencia": "urgente",
-  "confianca": 0.9668,
-  "probabilidades": {"atencao": 0.0208, "normal": 0.0124, "urgente": 0.9668},
+  "confianca": 0.9414,
+  "probabilidades": {"atencao": 0.0014, "normal": 0.0571, "urgente": 0.9414},
   "latencia_ms": 2.364,
   "modelo": "tfidf_logreg"
 }
 ```
+
+> ℹ️ Essa resposta é do modelo treinado com o **corpus real**. Se você gerou dados
+> sintéticos no passo 1, a classe e a confiança serão diferentes — o corpus sintético
+> serve para validar a stack, não para reproduzir predições.
 
 | Rota | Método | Descrição |
 |------|--------|-----------|

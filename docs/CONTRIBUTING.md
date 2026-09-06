@@ -126,8 +126,18 @@ Decisões tomadas, limitações conhecidas ou pendências.
 |-----------|-----|
 | Python 3.11+ | Código de treino e API |
 | Docker + Docker Compose | Stack de inferência e observabilidade |
-| Node.js | Apenas para Husky + commitlint |
+| Node.js | Opcional — apenas para Husky + commitlint |
 | Git | Controle de versão |
+
+### Ambiente Python
+
+```bash
+uv sync --group dev
+uv run python scripts/verify_setup.py
+```
+
+> ⚠️ `pip install -e ".[dev]"` **não funciona**: as dependências de desenvolvimento estão
+> em `[dependency-groups]` (PEP 735), que o pip ignora silenciosamente.
 
 ### Setup do padrão de commits
 
@@ -136,8 +146,8 @@ npm install
 npm run prepare
 ```
 
-> ⚠️ `package.json`, `commitlint.config.js` e a pasta `.husky/` ainda **não existem** no
-> repositório. Criá-los é uma tarefa da Etapa 0 — ver [ROADMAP.md](ROADMAP.md).
+Requer Node.js. Opcional — necessário apenas para validar mensagens de commit
+localmente, não para rodar o projeto.
 
 ---
 
