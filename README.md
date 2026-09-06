@@ -60,21 +60,76 @@ ciclo de vida do modelo funcione de ponta a ponta:
                           artefato de modelo
 ```
 
-### Decisão de nuvem
+### Decisão de deploy em nuvem
 
-A estratégia de deploy é **inferência em tempo real (real-time)**, não batch, porque a
-triagem só gera valor se ocorrer no momento da emissão do laudo.
+Três perguntas, respondidas em ordem.
 
-**Decisão:** **AWS — imagem no ECR, servida por EC2 atrás de um Application Load
-Balancer**, com retreino executado como job agendado e desacoplado da inferência.
+#### 1. Batch ou tempo real?
 
-O fator determinante foi **latência previsível**: uma instância sempre quente elimina o
-cold start, que é a maior fonte de variabilidade num serviço síncrono. Como um hospital
-emite laudos de forma contínua, scale-to-zero não traria economia real — apenas custaria
-previsibilidade.
+| Critério | Batch | Tempo real |
+|----------|-------|-----------|
+| Momento da predição | Lotes agendados | No instante da emissão do laudo |
+| Latência percebida | Minutos a horas | Milissegundos |
+| Custo | Menor | Maior (serviço sempre disponível) |
+| Aderência ao caso clínico | ❌ Baixa | ✅ Alta |
 
-> 📄 A análise completa — comparativo dos serviços AWS, batch vs. real-time e
-> trade-offs — está em **[docs/ARQUITETURA.md](docs/ARQUITETURA.md)**.
+**Decisão: tempo real, via API REST síncrona.** A triagem existe para encurtar o
+intervalo entre a emissão do laudo e a leitura por um profissional. Um laudo `urgente` só
+tem valor se o escalonamento ocorre em segundos — processar em lote a cada hora faria um
+caso crítico esperar até 59 minutos apenas na fila, anulando o propósito do sistema.
+
+Consequência direta: **latência vira requisito de produto**, não métrica técnica. É o que
+justifica a otimização da Etapa 4.
+
+#### 2. Qual provedor?
+
+Os três atendem tecnicamente: um container com FastAPI e um modelo de 1,23 MB roda
+igualmente bem em Cloud Run, Container Apps ou ECS, e as diferenças de latência entre
+serviços equivalentes são pequenas frente ao que o próprio modelo consome.
+
+**Decisão: AWS.** Sendo as opções tecnicamente equivalentes, o desempate passa a ser
+**risco operacional**. A equipe já opera ECR, IAM e ALB; num sistema que apoia triagem
+clínica, um erro de configuração de rede ou health check tem custo real, e trabalhar em
+terreno conhecido reduz essa superfície mais do que qualquer diferença entre plataformas
+agregaria. A aplicação continua sendo um container padrão — migrar depois seria trocar o
+destino do deploy, não reescrever o serviço.
+
+> Seria racionalização alegar superioridade técnica da AWS aqui. Nenhum dos três provedores
+> oferece vantagem relevante para uma API síncrona com modelo leve. O fator honesto é
+> redução de risco operacional.
+
+#### 3. Qual serviço da AWS?
+
+| Serviço | Escala a zero | Latência previsível | Adequação |
+|---------|---------------|--------------------|-----------|
+| **EC2 + ALB** | ❌ Não | ✅ Instância sempre quente | ✅ Escolhido |
+| ECS Fargate | ❌ Não | ✅ Alta | ✅ Evolução natural |
+| Lambda (container) | ✅ Sim | ⚠️ Cold start | ⚠️ Variável |
+| AWS Batch | ✅ Sim | ❌ Orientado a lote | ❌ Contradiz a decisão 1 |
+| SageMaker Endpoint | ❌ Não | ✅ Alta | ⚠️ Acima da necessidade |
+
+**Decisão: imagem no ECR, servida por EC2 atrás de um Application Load Balancer.**
+
+O fator determinante é **latência previsível**: a instância sempre quente elimina o cold
+start, maior fonte de variabilidade num serviço síncrono. Lambda foi descartado por isso —
+o modelo é pequeno (1,23 MB), mas as dependências (`scikit-learn` + `scipy` + `numpy`)
+passam de 100 MB, e o cold start resultante introduziria variabilidade justamente no
+requisito que o projeto precisa demonstrar. Como um hospital emite laudos continuamente,
+scale-to-zero não traria economia real — apenas custaria previsibilidade.
+
+O **retreino** é carga separada: job agendado, desacoplado da inferência. Treino e
+inferência nunca compartilham processo, o que mantém a API leve e o startup previsível.
+
+```
+Cliente (HIS) ──HTTPS──► ALB ──► EC2 [FastAPI + modelo]  ◄── imagem do ECR
+                                    │
+                                    └── /metrics ──► Prometheus ──► Grafana
+
+Job agendado: ingest → train → evaluate → export  ──►  artefato em S3
+```
+
+> 📄 Comparativos completos, ADRs e o baseline de latência medido estão em
+> **[docs/ARQUITETURA.md](docs/ARQUITETURA.md)**.
 
 ---
 
@@ -206,12 +261,28 @@ jupyter lab notebooks/
 
 ### API de inferência
 
+> ⚠️ **Pré-requisito:** a imagem embute o artefato do modelo, e `models/` não é
+> versionado. Um clone novo **precisa treinar o modelo antes de construir a imagem** —
+> caso contrário o container sobe e falha no startup com
+> `FileNotFoundError: Artefato do modelo nao encontrado`.
+
 ```bash
+# 1. Dados: baixe o corpus para data/raw/ (ver docs/DATASET.md)
+#    ou, para apenas validar a stack:
+python scripts/gen_synthetic_data.py --rows 3000
+
+# 2. Treine o modelo servido (um comando, ~1 min)
+uv run python scripts/train_serving_model.py
+
+# 3. Suba a API
 docker compose up -d --build
 
 # API ............ http://localhost:8000/docs
 # Health check ... http://localhost:8000/health
 ```
+
+O passo 2 executa as mesmas etapas dos notebooks, na mesma ordem — os notebooks são o
+registro da análise, não um passo de build.
 
 Classificando um laudo:
 

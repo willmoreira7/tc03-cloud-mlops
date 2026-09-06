@@ -53,7 +53,8 @@ class UrgencyClassifier:
         if not self.path.exists():
             raise FileNotFoundError(
                 f"Artefato do modelo nao encontrado em {self.path}. "
-                "Rode os notebooks 01 a 07 ou monte o volume de modelos."
+                "Rode `python scripts/train_serving_model.py` antes de "
+                "construir a imagem."
             )
         self._pipeline = joblib.load(self.path)
 

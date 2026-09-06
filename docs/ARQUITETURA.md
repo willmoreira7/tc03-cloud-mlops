@@ -43,10 +43,38 @@ justifica diretamente a Etapa 4 (otimização com ONNX Runtime / quantização).
 
 ## ☁️ Decisão 2 — Provedor e Serviços
 
-O provedor é a **AWS**, alinhada à experiência da equipe e ao ferramental já dominado.
-A pergunta em aberto é qual serviço da AWS hospeda o container.
+A escolha tem dois níveis: **qual provedor** e **qual serviço dentro dele**.
 
-### Comparativo dos serviços AWS
+### Nível 1 — Comparativo entre provedores
+
+Os três provedores atendem tecnicamente o caso. Um container com FastAPI e um modelo de
+1,23 MB roda em qualquer um deles, e as diferenças de latência entre serviços equivalentes
+são pequenas frente ao que o próprio modelo consome.
+
+| Critério | AWS | Azure | GCP |
+|----------|-----|-------|-----|
+| Serviço de container equivalente | ECS / EC2 / App Runner | Container Apps | Cloud Run |
+| Registry | ECR | ACR | Artifact Registry |
+| Maturidade para o caso | ✅ Alta | ✅ Alta | ✅ Alta |
+| Custo em carga contínua | Comparável | Comparável | Comparável |
+| Experiência operacional da equipe | ✅ **Consolidada** | ⚠️ Nenhuma | ⚠️ Nenhuma |
+
+### 🏆 Provedor: **AWS**
+
+Como as três opções são tecnicamente equivalentes para esta carga, o critério de desempate
+passa a ser **risco operacional**, não capacidade:
+
+| Fator | Peso na decisão |
+|-------|-----------------|
+| **Familiaridade da equipe** | Decisivo. Em um sistema que apoia triagem clínica, erro de configuração de rede, IAM ou health check tem custo real. Operar em terreno conhecido reduz essa superfície mais do que qualquer diferença entre os provedores agregaria |
+| **Ferramental já estabelecido** | ECR, IAM e ALB fazem parte do repertório da equipe; não há curva de aprendizado embutida no cronograma |
+| **Portabilidade preservada** | A aplicação é um container padrão. Se a decisão mudar, migrar para Container Apps ou Cloud Run é troca de destino de deploy, não reescrita — o custo do lock-in aqui é baixo |
+
+> ⚠️ **O que *não* justificaria a escolha:** nenhum dos três oferece vantagem técnica
+> relevante para uma API síncrona com modelo leve. Alegar superioridade de plataforma aqui
+> seria racionalização. O fator honesto é redução de risco operacional.
+
+### Nível 2 — Comparativo dos serviços AWS
 
 | Serviço | Escala a zero | Latência previsível | Operação | Adequação ao caso |
 |---------|---------------|--------------------|----------|-------------------|
