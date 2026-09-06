@@ -1,0 +1,26 @@
+.git/
+.github/
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Dados brutos e processados nao entram na imagem de inferencia.
+data/
+
+# Notebooks e suas saidas sao material de analise, nao de runtime.
+notebooks/
+docs/
+tests/
+scripts/
+
+# Apenas o artefato servido importa; logs de busca e metricas ficam de fora.
+models/*/search_log.csv
+models/evaluation/
+
+.env
+*.md
+!README.md

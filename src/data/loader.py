@@ -82,9 +82,9 @@ def load_raw() -> pd.DataFrame:
     text_col = _resolve_column(raw, data_config["raw_text_column"], _TEXT_CANDIDATES)
     label_col = _resolve_column(raw, data_config["raw_label_column"], _LABEL_CANDIDATES)
 
-    return raw.rename(
-        columns={text_col: TEXT_COLUMN, label_col: "categoria_original"}
-    )[[TEXT_COLUMN, "categoria_original"]]
+    return raw.rename(columns={text_col: TEXT_COLUMN, label_col: "categoria_original"})[
+        [TEXT_COLUMN, "categoria_original"]
+    ]
 
 
 def load_split(name: str) -> pd.DataFrame:

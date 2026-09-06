@@ -1,0 +1,24 @@
+# Stack local de inferencia.
+# Etapa 3 adiciona Prometheus e Grafana a este arquivo.
+#
+#   docker compose up --build
+#   API:  http://localhost:8000/docs
+
+services:
+  api:
+    build:
+      context: .
+      target: runtime
+    image: tc03-triagem-api:latest
+    container_name: tc03-api
+    ports:
+      - "8000:8000"
+    environment:
+      PYTHONUNBUFFERED: "1"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped

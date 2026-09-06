@@ -26,11 +26,13 @@ uma métrica técnica.
 O foco do desafio **não é maximizar a acurácia do modelo**, e sim garantir que o
 ciclo de vida do modelo funcione de ponta a ponta:
 
-- ✅ Classificador de texto (NLP) **leve**, servido via **API REST** em container Docker
-- ✅ **Pipeline CI/CD** com GitHub Actions (lint → test → build)
-- ✅ **Orquestração de retreino** com Airflow (ingestão → treino → salvamento)
-- ✅ **Monitoramento** com Prometheus + Grafana via Docker Compose
-- ✅ **Otimização de latência** (ONNX Runtime / quantização) com comparativo antes/depois
+- Classificador de texto (NLP) **leve**, servido via **API REST** em container Docker
+- **Pipeline CI/CD** com GitHub Actions (lint → test → build)
+- **Orquestração de retreino** com Airflow (ingestão → treino → salvamento)
+- **Monitoramento** com Prometheus + Grafana via Docker Compose
+- **Otimização de latência** (ONNX Runtime / quantização) com comparativo antes/depois
+
+> O andamento de cada item está em [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ---
 
@@ -63,10 +65,15 @@ ciclo de vida do modelo funcione de ponta a ponta:
 A estratégia de deploy é **inferência em tempo real (real-time)**, não batch, porque a
 triagem só gera valor se ocorrer no momento da emissão do laudo.
 
-**Proposta:** container único servido em plataforma serverless de containers
-(scale-to-zero), com retreino executado como job agendado.
+**Decisão:** **AWS — imagem no ECR, servida por EC2 atrás de um Application Load
+Balancer**, com retreino executado como job agendado e desacoplado da inferência.
 
-> 📄 A análise completa — comparativo AWS × Azure × GCP, batch vs. real-time, custos e
+O fator determinante foi **latência previsível**: uma instância sempre quente elimina o
+cold start, que é a maior fonte de variabilidade num serviço síncrono. Como um hospital
+emite laudos de forma contínua, scale-to-zero não traria economia real — apenas custaria
+previsibilidade.
+
+> 📄 A análise completa — comparativo dos serviços AWS, batch vs. real-time e
 > trade-offs — está em **[docs/ARQUITETURA.md](docs/ARQUITETURA.md)**.
 
 ---
@@ -112,6 +119,13 @@ Três leituras que a comparação sustenta:
 - **SVC e LogReg empataram tecnicamente** (Δ 0,0093); o desempate por latência teve
   margem de 0,07 ms, que é ruído — [decisão em aberto](docs/MODEL_CARD.md#-decisão-em-aberto)
 
+### Modelo servido pela API
+
+A API serve o **`tfidf_logreg`**, não o promovido pela regra. Os dois empataram
+tecnicamente, e o LogReg expõe `predict_proba` — necessário para devolver score de
+confiança, que numa fila clínica permite limiar ajustável. A divergência é deliberada e
+está registrada como ADR 10 em [docs/ARQUITETURA.md](docs/ARQUITETURA.md).
+
 > 📄 Análise completa em **[docs/MODEL_CARD.md](docs/MODEL_CARD.md)** · metodologia em
 > **[docs/NOTEBOOKS.md](docs/NOTEBOOKS.md)**.
 
@@ -149,14 +163,14 @@ tc03-cloud-mlops/
 │   ├── config.py            # ✅ Caminhos, seed e carregamento de config
 │   ├── data/                # ✅ Loader, limpeza, mapeamento e splits
 │   ├── evaluation/          # ✅ Métricas, latência e regra de promoção
-│   └── models/              # ✅ Pipelines dos candidatos e rotina de experimento
-├── tests/                   # Testes automatizados (pytest)
+│   ├── models/              # ✅ Pipelines dos candidatos e rotina de experimento
+│   └── api/                 # ✅ Serviço FastAPI de inferência
+├── tests/                   # ✅ Testes automatizados (pytest)
+├── Dockerfile               # ✅ Imagem do serviço de inferência
+├── docker-compose.yml       # ✅ Stack local (Prometheus/Grafana na Etapa 3)
 ├── .github/workflows/       # ⬜ Pipelines de CI/CD (Etapa 2)
 ├── airflow/dags/            # ⬜ DAG de treino/retreino (Etapa 2)
-├── api/                     # ⬜ Serviço FastAPI (Etapa 1)
-├── monitoring/              # ⬜ Prometheus e dashboards Grafana (Etapa 3)
-├── docker-compose.yml       # ⬜ API + Prometheus + Grafana (Etapa 3)
-└── Dockerfile               # ⬜ Imagem do serviço de inferência (Etapa 1)
+└── monitoring/              # ⬜ Prometheus e dashboards Grafana (Etapa 3)
 ```
 
 **Legenda:** ✅ existe · ⬜ a construir na etapa indicada
@@ -190,17 +204,51 @@ jupyter lab notebooks/
 
 > 📄 Detalhes em [docs/NOTEBOOKS.md](docs/NOTEBOOKS.md).
 
-### Stack de inferência
-
-> 🚧 **Etapas 1 e 3.** Ainda não implementada.
+### API de inferência
 
 ```bash
-docker compose up -d
-# API .......... http://localhost:8000/docs
-# Métricas ..... http://localhost:8000/metrics
-# Prometheus ... http://localhost:9090
-# Grafana ...... http://localhost:3000
+docker compose up -d --build
+
+# API ............ http://localhost:8000/docs
+# Health check ... http://localhost:8000/health
 ```
+
+Classificando um laudo:
+
+```bash
+curl -X POST http://localhost:8000/predict   -H "Content-Type: application/json"   -d '{"texto": "Patient presented with acute myocardial infarction and severe coronary artery stenosis."}'
+```
+
+```json
+{
+  "urgencia": "urgente",
+  "confianca": 0.9668,
+  "probabilidades": {"atencao": 0.0208, "normal": 0.0124, "urgente": 0.9668},
+  "latencia_ms": 2.364,
+  "modelo": "tfidf_logreg"
+}
+```
+
+| Rota | Método | Descrição |
+|------|--------|-----------|
+| `/predict` | `POST` | Classifica o laudo; 422 se o texto for vazio ou menor que 30 caracteres |
+| `/health` | `GET` | Estado do serviço e se o modelo está em memória |
+| `/docs` | `GET` | OpenAPI interativo |
+
+Medindo a latência:
+
+```bash
+uv run python scripts/measure_api_latency.py --url http://localhost:8000
+```
+
+> ⚠️ Em **Docker Desktop no Windows**, o número fim a fim carrega ~45 ms de proxy de rede
+> que não existem em host Linux. A referência para comparar a otimização da Etapa 4 é o
+> campo `latencia_ms` da resposta — ver
+> [docs/ARQUITETURA.md](docs/ARQUITETURA.md#baseline-medido-etapa-1).
+
+### Monitoramento
+
+> 🚧 **Etapa 3.** Prometheus e Grafana ainda não integrados.
 
 ---
 
