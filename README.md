@@ -352,6 +352,7 @@ uv run python scripts/measure_api_latency.py --url http://localhost:8000
 uv run pytest tests/ -v
 uv run ruff check src/ scripts/ tests/
 uv run ruff format --check src/ scripts/ tests/
+uv run nbqa ruff notebooks/          # lint dentro dos notebooks
 ```
 
 > Os testes da API são pulados automaticamente se o artefato do modelo não existir —

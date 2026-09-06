@@ -84,7 +84,7 @@ git push -u origin feat/nome-da-tarefa
 
 - [ ] A branch parte da `main` atualizada
 - [ ] Commits seguem o padrão do [COMMITLINT.md](COMMITLINT.md)
-- [ ] Lint passa localmente
+- [ ] Lint passa localmente (`ruff` e `nbqa ruff`)
 - [ ] Testes passam localmente
 - [ ] Documentação afetada foi atualizada
 - [ ] Nenhum dado, credencial ou `.env` foi versionado
@@ -160,6 +160,7 @@ localmente, não para rodar o projeto.
 | Formatação | A definir na Etapa 2 (sugestão: `ruff format`) |
 | Lint | A definir na Etapa 2 (sugestão: `ruff`) |
 | Testes | `pytest`, em `tests/` espelhando `src/` |
+| Notebooks | `nbqa ruff notebooks/` deve passar; saídas **são** versionadas — ver [NOTEBOOKS.md](NOTEBOOKS.md#-higienização-dos-notebooks) |
 | Segredos | Sempre em `.env` — nunca no código |
 
 ---

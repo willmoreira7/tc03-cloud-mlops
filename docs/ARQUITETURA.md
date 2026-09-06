@@ -175,6 +175,8 @@ carrega um artefato pronto — isso mantém o serviço leve e o tempo de startup
 | 08 | **Não** usar MLflow nesta fase | 🟡 Proposta | Não exigido pelo PDF; reavaliar após Etapas 1–3 |
 | 09 | **Não** usar DVC, Kubernetes ou Terraform | ✅ Aceita | Fora do escopo do enunciado |
 | 10 | API serve `tfidf_logreg`, não o promovido `tfidf_linear_svc` | ✅ Aceita | Empate técnico entre os dois; o LogReg expõe `predict_proba` e permite score de confiança |
+| 11 | Notebooks versionados **com** as saídas; sem `nbstripout` | ✅ Aceita | Quem clona vê o resultado da análise sem executar nada. Reavaliar se o corpus passar a ter dado clínico real |
+| 12 | `nbqa` roda o `ruff` nos notebooks | ✅ Aceita | O código da análise não pode ser a única parte do projeto sem lint |
 
 > ℹ️ **Sobre a ADR 10.** A regra de promoção elegeu o `tfidf_linear_svc`, mas a
 > diferença para o `tfidf_logreg` é de 0,0093 em F1-macro — dentro do limiar de empate

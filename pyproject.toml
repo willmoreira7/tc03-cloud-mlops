@@ -22,6 +22,8 @@ dev = [
     "httpx>=0.28",
     "jupyter>=1.1",
     "matplotlib>=3.9",
+    # Roda o ruff dentro dos notebooks. Ver docs/NOTEBOOKS.md.
+    "nbqa>=1.9",
     "pytest>=8.3",
     "pytest-cov>=6.0",
     "ruff>=0.8",
@@ -46,6 +48,8 @@ packages = ["src"]
 [tool.ruff]
 line-length = 88
 target-version = "py312"
+# `display` e builtin do kernel Jupyter; sem isso o ruff acusa F821 nos notebooks.
+builtins = ["display"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]
@@ -53,6 +57,14 @@ select = ["E", "F", "W", "I"]
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+# O nbqa converte cada notebook para um .py temporario antes de chamar o ruff,
+# entao per-file-ignores com padrao "*.ipynb" nao casaria. A excecao vai aqui.
+#
+# E402 e a UNICA regra relaxada: notebook importa conforme a narrativa avanca,
+# nao tudo na primeira celula. F401, F821 e E501 continuam valendo.
+[tool.nbqa.addopts]
+ruff = ["--extend-ignore=E402"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
