@@ -31,3 +31,7 @@ dist/
 # Saidas de notebook
 /notebooks/outputs/*
 !/notebooks/outputs/.gitkeep
+
+# Node (apenas ferramental de commitlint)
+node_modules/
+.husky/_/
