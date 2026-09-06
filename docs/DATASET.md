@@ -72,14 +72,18 @@ prazo.
 
 ## 📥 Como Obter os Dados
 
+### 🔗 Link do dataset
+
+**https://www.kaggle.com/datasets/saharalaa/medical-abstracts-tc-corpus**
+
 O download é **manual** — não há credencial de Kaggle configurada no projeto, e os dados
 não são versionados.
 
 | Passo | Ação |
 |-------|------|
-| 1 | Baixar o Medical Abstracts TC Corpus do Kaggle |
-| 2 | Colocar os CSVs em `data/raw/` |
-| 3 | Rodar `notebooks/01_eda.ipynb` |
+| 1 | Baixar o dataset no link acima (requer conta gratuita no Kaggle) |
+| 2 | Extrair e colocar os CSVs em `data/raw/` |
+| 3 | Conferir com `uv run python scripts/verify_setup.py` |
 
 ### Arquivos esperados
 

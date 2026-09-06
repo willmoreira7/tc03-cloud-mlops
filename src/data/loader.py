@@ -15,6 +15,8 @@ import pandas as pd
 
 from src.config import DATA_PROCESSED, DATA_RAW, load_config
 
+DATASET_URL = "https://www.kaggle.com/datasets/saharalaa/medical-abstracts-tc-corpus"
+
 TEXT_COLUMN = "texto"
 LABEL_COLUMN = "urgencia"
 
