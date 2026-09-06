@@ -10,7 +10,7 @@
 | Etapa | Disciplina | Peso relacionado | Status |
 |-------|-----------|------------------|--------|
 | [0 — Fundação](#-etapa-0--fundação-do-repositório) | — | — | 🟡 Em andamento |
-| [1 — Arquitetura e API](#-etapa-1--decisão-arquitetural-e-api-inicial) | Deploy em Nuvem | 15% (doc) | ⬜ Não iniciada |
+| [1 — Arquitetura e API](#-etapa-1--decisão-arquitetural-e-api-inicial) | Deploy em Nuvem | 15% (doc) | ✅ Concluída |
 | [2 — CI/CD e Pipeline](#-etapa-2--cicd-e-pipeline-automatizado) | CI/CD e Pipeline de Treino | 30% | ⬜ Não iniciada |
 | [3 — Monitoramento](#-etapa-3--monitoramento-e-observabilidade) | Monitoração de Performance | 20% | ⬜ Não iniciada |
 | [4 — Otimização e Entrega](#-etapa-4--otimização-de-latência-e-entrega) | Latência em Modelos Não Estruturados | 35% | 🟡 Modelo selecionado; otimização pendente |
@@ -29,7 +29,7 @@ Conferência item a item do que o enunciado exige.
 |-----------|--------|------|
 | Pipeline CI/CD com GitHub Actions (lint → test → build) | ⬜ | Etapa 2 |
 | Script ou DAG Airflow para treino/retreino | ⬜ | Etapa 2 |
-| Dockerfile funcional para o serviço de inferência | ⬜ | Etapa 1 |
+| Dockerfile funcional para o serviço de inferência | ✅ | `Dockerfile` + `docker-compose.yml` |
 | Stack de monitoramento local (API + Prometheus + Grafana) | ⬜ | Etapa 3 |
 | Histórico de commits semântico e organizado | ✅ | [COMMITLINT.md](COMMITLINT.md) |
 
@@ -38,7 +38,7 @@ Conferência item a item do que o enunciado exige.
 | Biblioteca | Uso exigido | Status |
 |-----------|-------------|--------|
 | Scikit-Learn | Modelo base de classificação de texto | ✅ TF-IDF + LinearSVC / LogReg / RF |
-| FastAPI | Construção da API | ⬜ Etapa 1 |
+| FastAPI | Construção da API | ✅ `src/api/` |
 | Prometheus-client | Instrumentação de métricas | ⬜ Etapa 3 |
 | Airflow | Orquestração de tarefas | ⬜ Etapa 2 |
 
@@ -116,10 +116,10 @@ colocar o próprio código sem precisar perguntar.
 
 ### Tarefas
 
-- [ ] Analisar estratégia de deploy em nuvem (batch vs. real-time) e documentar no README
-- [ ] Criar API FastAPI com endpoint que recebe o texto do laudo e retorna a classificação
-- [ ] Empacotar a API em container Docker
-- [ ] Medir o tempo de resposta — **baseline de latência local**
+- [x] Analisar estratégia de deploy em nuvem (batch vs. real-time) e documentar
+- [x] Criar API FastAPI com endpoint que recebe o texto do laudo e retorna a classificação
+- [x] Empacotar a API em container Docker
+- [x] Medir o tempo de resposta — **baseline de latência local**
 
 ### Endpoints previstos
 
@@ -131,16 +131,35 @@ colocar o próprio código sem precisar perguntar.
 
 ### 📦 Entregável
 
-API funcional rodando em Docker + decisão arquitetural documentada.
+✅ API funcional rodando em Docker + decisão arquitetural documentada.
 
 ### ✅ Critério de aceite
 
-- `docker compose up` sobe a API e `/docs` responde
-- Baseline de latência registrado em [ARQUITETURA.md](ARQUITETURA.md) com o método de medição
+- [x] `docker compose up` sobe a API e `/docs` responde
+- [x] Baseline de latência registrado em [ARQUITETURA.md](ARQUITETURA.md#baseline-medido-etapa-1) com o método de medição
 
-> ⚠️ **Dependência:** na Etapa 1 o modelo real ainda não existe. Usar um classificador
-> baseline treinado rapidamente (ou stub determinístico) só para fechar o contrato da API —
-> e deixar isso explícito no código.
+### 📊 Baseline medido
+
+| Ambiente | Fim a fim p95 | Inferência p95 |
+|----------|--------------|----------------|
+| Container (Docker Desktop, Windows) | 53,17 ms | 4,82 ms |
+| Processo nativo no host | 7,52 ms | 4,60 ms |
+
+> 🔴 Os ~45 ms de diferença são do proxy de rede do Docker Desktop no Windows, não da
+> aplicação — a inferência é praticamente idêntica nos dois. **A Etapa 4 deve comparar a
+> latência de inferência**, não o fim a fim medido neste ambiente, sob pena de esconder o
+> ganho do ONNX dentro do ruído do proxy.
+
+### 🔧 Melhoria conhecida
+
+A imagem final tem **1,01 GB**. `pandas` e `pyarrow` estão nas dependências principais
+mas não são usados no caminho de inferência — excluí-los do estágio de runtime reduziria
+a imagem de forma relevante. Não afeta latência no destino escolhido (EC2 sempre quente),
+mas afeta tempo de build e de deploy.
+
+> ℹ️ A ordem acabou invertida em relação ao previsto: a seleção de modelo foi feita antes
+> da API, então não foi preciso stub — o serviço já nasceu servindo um modelo treinado
+> (`tfidf_logreg`, ver ADR 10 em [ARQUITETURA.md](ARQUITETURA.md)).
 
 ---
 

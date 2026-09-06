@@ -34,6 +34,13 @@ classes:
   - atencao
   - urgente
 
+# Modelo servido pela API.
+# Pode divergir do promovido pela regra: SVC e LogReg empataram tecnicamente
+# (delta f1_macro 0,0093) e o LogReg expoe predict_proba, necessario para
+# devolver score de confianca. Ver ADR 10 em docs/ARQUITETURA.md.
+serving:
+  model: tfidf_logreg
+
 # Restricoes do criterio de promocao (docs/NOTEBOOKS.md).
 promotion:
   metric: f1_macro

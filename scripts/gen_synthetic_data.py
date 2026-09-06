@@ -40,8 +40,18 @@ _VOCAB: dict[str, list[str]] = {
 }
 
 _FILLER = [
-    "paciente", "exame", "achado", "quadro", "avaliacao", "controle",
-    "aspecto", "regiao", "evolucao", "sinais", "ausencia", "presenca",
+    "paciente",
+    "exame",
+    "achado",
+    "quadro",
+    "avaliacao",
+    "controle",
+    "aspecto",
+    "regiao",
+    "evolucao",
+    "sinais",
+    "ausencia",
+    "presenca",
 ]
 
 
