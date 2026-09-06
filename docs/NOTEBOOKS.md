@@ -319,6 +319,56 @@ promovido, e medir o ganho.
 
 ---
 
+## 🧹 Higienização dos Notebooks
+
+### ✅ `nbqa` — lint dentro dos notebooks
+
+O `ruff` cobre `src/`, `scripts/` e `tests/`, mas ignora `.ipynb`. Sem o `nbqa`, o código
+dos notebooks — que é onde a análise acontece — ficaria sem verificação nenhuma.
+
+```bash
+uv run nbqa ruff notebooks/
+uv run nbqa ruff notebooks/ --fix
+```
+
+**E402 é a única regra relaxada.** Notebook importa conforme a narrativa avança, não tudo
+na primeira célula; exigir o contrário quebraria a leitura. `F401` (import morto), `F821`
+(nome indefinido) e `E501` (linha longa) continuam valendo.
+
+`display` está declarado em `builtins` no `pyproject.toml`: é builtin do kernel Jupyter, e
+sem isso o ruff acusaria F821 em toda chamada.
+
+> ℹ️ O `nbqa` converte cada notebook para um `.py` temporário antes de chamar o ruff. Por
+> isso a exceção fica em `[tool.nbqa.addopts]`, e não em `per-file-ignores` com padrão
+> `"*.ipynb"` — esse padrão nunca casaria com o arquivo temporário.
+
+### ❌ `nbstripout` — decisão de **não** usar
+
+O `nbstripout` remove as saídas dos notebooks no commit. Aqui os notebooks são
+versionados **com as saídas**: gráficos da EDA, matrizes de confusão e a tabela de
+comparação ficam visíveis no repositório.
+
+| Argumento a favor do `nbstripout` | Por que não pesa neste projeto |
+|-----------------------------------|-------------------------------|
+| Diff de notebook fica legível | O notebook é **entregável de análise**, não só código-fonte |
+| Evita conflito de merge no JSON | Equipe pequena, notebooks com donos distintos — não é o gargalo |
+| Repositório mais leve | 372 KB no total; irrelevante |
+| Evita vazar dados nas saídas | ⚠️ **Legítimo, mas não se aplica hoje** — ver abaixo |
+
+**Motivo da decisão:** quem clona o repositório precisa conseguir **ver o resultado da
+análise sem executar nada**. Um avaliador que não tenha o corpus, ou que não consiga
+montar o ambiente, ainda assim lê as métricas, os gráficos e a matriz de confusão
+diretamente no GitHub. Apagar as saídas transferiria para o leitor o custo de reproduzir
+tudo só para enxergar qualquer número.
+
+> 🔴 **O que mudaria essa decisão.** As saídas versionadas incluem trechos de abstracts
+> reais impressos (`raw.head(3)` no `01_eda`). No corpus público isso é aceitável. **Se o
+> projeto passar a usar laudos hospitalares reais, essas saídas viram vazamento de dado
+> clínico** — nesse cenário o `nbstripout` deixa de ser preferência e passa a ser
+> obrigatório, junto com uma revisão do que cada célula imprime.
+
+---
+
 ## ✅ Checklist de Qualidade
 
 Aplicável a todos os notebooks:
@@ -332,6 +382,8 @@ Aplicável a todos os notebooks:
 - [ ] Lógica reutilizável movida para `src/` (o notebook chama, não reimplementa)
 - [ ] Outputs persistidos em `models/` e `outputs/`, nunca só na saída da célula
 - [ ] Notebook executa do início ao fim sem erro após *Restart & Run All*
+- [ ] `uv run nbqa ruff notebooks/` passa limpo
+- [ ] Saídas salvas no arquivo (são versionadas de propósito — ver acima)
 
 ---
 
