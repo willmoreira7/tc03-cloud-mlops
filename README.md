@@ -234,19 +234,42 @@ tc03-cloud-mlops/
 
 ## 🚀 Como Executar
 
+### Pré-requisitos
+
+| Ferramenta | Versão | Para quê | Como instalar |
+|-----------|--------|----------|---------------|
+| **uv** | 0.5+ | Gerencia o ambiente Python e trava as versões | `pip install uv` ou [astral.sh/uv](https://docs.astral.sh/uv/getting-started/installation/) |
+| **Docker** | 24+ | Roda a API em container | [docs.docker.com/get-docker](https://docs.docker.com/get-docker/) |
+
+O Python é instalado pelo próprio `uv` (versão fixada em `pyproject.toml`), não é preciso
+ter 3.12 no sistema.
+
+> ⚠️ **Todos os comandos abaixo usam `uv run`.** Isso executa dentro do ambiente do
+> projeto sem precisar ativar venv. Rodar `python ...` ou `jupyter ...` direto usaria o
+> Python do sistema, que não tem as dependências.
+>
+> `pip install -e ".[dev]"` **não funciona** neste projeto: as dependências de
+> desenvolvimento estão em `[dependency-groups]` (PEP 735), que o pip ignora
+> silenciosamente — ele instalaria só as dependências base, sem `pytest` nem `jupyter`.
+
+### Verificação rápida
+
+Um comando confirma que o ambiente está correto antes de qualquer outra coisa:
+
+```bash
+uv sync --group dev
+uv run python scripts/verify_setup.py
+```
+
 ### Seleção do modelo (notebooks)
 
 ```bash
-# 1. Dependências
-uv sync --group dev            # ou: pip install -e ".[dev]"
-
-# 2. Dados
-#    Baixe o corpus para data/raw/ — ver docs/DATASET.md
+# 1. Dados: baixe o corpus para data/raw/ — ver docs/DATASET.md
 #    Sem o corpus ainda? Gere um substituto sintético:
-python scripts/gen_synthetic_data.py --rows 3000
+uv run python scripts/gen_synthetic_data.py --rows 3000
 
-# 3. Rode os notebooks na ordem
-jupyter lab notebooks/
+# 2. Rode os notebooks na ordem
+uv run jupyter lab notebooks/
 ```
 
 | Ordem | Notebook | O que faz |
@@ -269,7 +292,7 @@ jupyter lab notebooks/
 ```bash
 # 1. Dados: baixe o corpus para data/raw/ (ver docs/DATASET.md)
 #    ou, para apenas validar a stack:
-python scripts/gen_synthetic_data.py --rows 3000
+uv run python scripts/gen_synthetic_data.py --rows 3000
 
 # 2. Treine o modelo servido (um comando, ~1 min)
 uv run python scripts/train_serving_model.py
@@ -311,6 +334,27 @@ Medindo a latência:
 ```bash
 uv run python scripts/measure_api_latency.py --url http://localhost:8000
 ```
+
+### Testes e qualidade de código
+
+```bash
+uv run pytest tests/ -v
+uv run ruff check src/ scripts/ tests/
+uv run ruff format --check src/ scripts/ tests/
+```
+
+> Os testes da API são pulados automaticamente se o artefato do modelo não existir —
+> rode `uv run python scripts/train_serving_model.py` antes.
+
+### Padrão de commits (opcional, só para contribuir)
+
+```bash
+npm install
+npm run prepare
+```
+
+Requer Node.js. **Não é necessário para rodar nem avaliar o projeto** — serve apenas para
+validar mensagens de commit. Ver [docs/COMMITLINT.md](docs/COMMITLINT.md).
 
 > ⚠️ Em **Docker Desktop no Windows**, o número fim a fim carrega ~45 ms de proxy de rede
 > que não existem em host Linux. A referência para comparar a otimização da Etapa 4 é o

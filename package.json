@@ -1,0 +1,15 @@
+{
+  "name": "tc03-cloud-mlops",
+  "version": "0.1.0",
+  "description": "Validacao das mensagens de commit. Nao e necessario para rodar o projeto.",
+  "private": true,
+  "devDependencies": {
+    "@commitlint/cli": "^19.6.0",
+    "@commitlint/config-conventional": "^19.6.0",
+    "husky": "^9.1.7"
+  },
+  "scripts": {
+    "commitlint": "commitlint --edit",
+    "prepare": "husky"
+  }
+}
