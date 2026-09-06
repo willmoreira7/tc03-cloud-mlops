@@ -17,3 +17,17 @@ dist/
 /.idea/
 *.swp
 *.DS_Store
+
+# Dados (nao versionados)
+/data/raw/*
+!/data/raw/.gitkeep
+/data/processed/*
+!/data/processed/.gitkeep
+
+# Artefatos de modelo
+/models/*
+!/models/.gitkeep
+
+# Saidas de notebook
+/notebooks/outputs/*
+!/notebooks/outputs/.gitkeep

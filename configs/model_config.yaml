@@ -1,0 +1,72 @@
+# Configuracao unica do pipeline de selecao de modelo.
+# Notebooks e modulos de src/ leem daqui - nada de constante solta no notebook.
+
+seed: 42
+
+data:
+  # Arquivos brutos esperados em data/raw/ (download manual - ver docs/DATASET.md).
+  raw_files:
+    - medical_tc_train.csv
+    - medical_tc_test.csv
+  # Nomes de coluna do corpus bruto. Ajustar se o arquivo baixado divergir.
+  raw_text_column: medical_abstract
+  raw_label_column: condition_label
+  # Descarta textos degenerados antes do split.
+  min_text_chars: 30
+
+split:
+  train_ratio: 0.70
+  val_ratio: 0.15
+  test_ratio: 0.15
+  stratify: true
+
+# Mapeamento categoria original -> nivel de urgencia.
+# ATENCAO: regra heuristica, NAO validada clinicamente. Ver docs/DATASET.md.
+urgency_mapping:
+  "1": atencao    # neoplasms - investigacao prioritaria
+  "2": normal     # digestive system diseases
+  "3": atencao    # nervous system diseases - investigacao prioritaria
+  "4": urgente    # cardiovascular diseases - janela terapeutica curta
+  "5": normal     # general pathological conditions
+
+classes:
+  - normal
+  - atencao
+  - urgente
+
+# Restricoes do criterio de promocao (docs/NOTEBOOKS.md).
+promotion:
+  metric: f1_macro
+  min_recall_urgente: 0.60
+  max_latency_p95_ms: 15.0
+
+# Protocolo de medicao de latencia.
+# max_seconds limita o tempo de medicao: um modelo lento (RF sobre TF-IDF passa
+# de 300ms por chamada) faria a medicao sozinha levar minutos. min_calls garante
+# amostra suficiente mesmo quando o orcamento estoura. O numero real de chamadas
+# fica registrado em latency_n_calls.
+latency:
+  warmup_calls: 50
+  measured_calls: 1000
+  min_calls: 200
+  max_seconds: 45
+
+vectorizer:
+  max_features: 20000
+  ngram_range: [1, 2]
+  min_df: 2
+  sublinear_tf: true
+
+models:
+  logreg:
+    C: [0.5, 1.0, 3.0]
+    class_weight: [balanced]
+    max_iter: [1000]
+  random_forest:
+    n_estimators: [200, 400]
+    max_depth: [null, 40]
+    min_samples_leaf: [1, 2]
+    class_weight: [balanced]
+  linear_svc:
+    C: [0.5, 1.0, 3.0]
+    class_weight: [balanced]
