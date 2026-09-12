@@ -1,0 +1,32 @@
+# Regras de alerta para o servico de triagem.
+#
+# Os alertas seguem o metodo RED: taxa de erro e latencia de cauda (P95).
+# O `for:` evita disparar em picos isolados de 15 segundos. Cada alerta
+# precisa de um dono e de uma acao clara -- sem isso vira ruido e alert fatigue.
+
+groups:
+  - name: triagem-red
+    interval: 30s
+    rules:
+      - alert: TriagemTaxaErroAlta
+        expr: |
+          sum(rate(triagem_requests_total{status=~"5.."}[5m]))
+          / sum(rate(triagem_requests_total[5m])) > 0.01
+        for: 5m
+        labels:
+          severity: critical
+          team: ml
+        annotations:
+          summary: "Taxa de erro do servico de triagem acima de 1%"
+          description: "Proporcao de respostas 5xx em {{ $value | humanizePercentage }} nos ultimos 5 minutos."
+
+      - alert: TriagemLatenciaP95Alta
+        expr: |
+          histogram_quantile(0.95, sum(rate(triagem_latency_seconds_bucket[5m])) by (le)) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+          team: ml
+        annotations:
+          summary: "Latencia P95 acima do SLO de 500ms"
+          description: "P95 em {{ $value | humanizeDuration }} nos ultimos 10 minutos."

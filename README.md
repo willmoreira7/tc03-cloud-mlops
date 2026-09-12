@@ -219,13 +219,13 @@ tc03-cloud-mlops/
 │   ├── data/                # ✅ Loader, limpeza, mapeamento e splits
 │   ├── evaluation/          # ✅ Métricas, latência e regra de promoção
 │   ├── models/              # ✅ Pipelines dos candidatos e rotina de experimento
-│   └── api/                 # ✅ Serviço FastAPI de inferência
+│   └── api/                 # ✅ Serviço FastAPI de inferência + instrumentação
 ├── tests/                   # ✅ Testes automatizados (pytest)
+├── monitoring/              # ✅ Prometheus e dashboards Grafana (Etapa 3)
 ├── Dockerfile               # ✅ Imagem do serviço de inferência
-├── docker-compose.yml       # ✅ Stack local (Prometheus/Grafana na Etapa 3)
+├── docker-compose.yml       # ✅ Stack local: API + Prometheus + Grafana
 ├── .github/workflows/       # ⬜ Pipelines de CI/CD (Etapa 2)
-├── airflow/dags/            # ⬜ DAG de treino/retreino (Etapa 2)
-└── monitoring/              # ⬜ Prometheus e dashboards Grafana (Etapa 3)
+└── airflow/dags/            # ⬜ DAG de treino/retreino (Etapa 2)
 ```
 
 **Legenda:** ✅ existe · ⬜ a construir na etapa indicada
@@ -375,7 +375,41 @@ validar mensagens de commit. Ver [docs/COMMITLINT.md](docs/COMMITLINT.md).
 
 ### Monitoramento
 
-> 🚧 **Etapa 3.** Prometheus e Grafana ainda não integrados.
+A stack de observabilidade (Etapa 3) sobe junto com a API num único comando:
+
+```bash
+# Treine o modelo servido (pre-requisito da imagem)
+uv run python scripts/train_serving_model.py
+
+# Suba a stack completa: API + Prometheus + Grafana
+docker compose up -d --build
+
+# API         ......... http://localhost:8000/docs
+# Prometheus  ......... http://localhost:9090  (Status -> Targets)
+# Grafana     ......... http://localhost:3000  (admin / admin)
+```
+
+O dashboard **Triagem de Laudos - Observabilidade** é provisionado automaticamente
+na pasta *Triagem* do Grafana a partir de
+[`monitoring/grafana/dashboards/triagem-laudos.json`](monitoring/grafana/dashboards/triagem-laudos.json)
+— não é preciso criá-lo pela UI.
+
+| Painel | Métrica base | PromQL |
+|--------|-------------|-------|
+| Total de requisições | `triagem_requests_total` | `sum(increase(triagem_requests_total[$__range]))` |
+| Latência P50/P95/P99 | `triagem_latency_seconds` | `histogram_quantile(0.95, sum(rate(..._bucket[5m])) by (le))` |
+| Taxa de erro (5xx) | `triagem_requests_total{status=~"5.."}` | `sum(rate(...{status=~"5.."}[5m])) / sum(rate(...[5m]))` |
+| Distribuição das classes | `triagem_predictions_total` | `sum(increase(...[$__range])) by (urgencia)` |
+
+Para popular os gráficos com carga sintética:
+
+```bash
+uv run python scripts/generate_load.py --url http://localhost:8000 --duration 60
+```
+
+A instrumentação da API vive em [`src/api/metrics.py`](src/api/metrics.py) e segue o
+método **RED** (Rate, Errors, Duration) com `prometheus_client`. O `/metrics` é
+exposto em `/metrics` via ASGI app do `prometheus_client`.
 
 ---
 
@@ -384,10 +418,10 @@ validar mensagens de commit. Ver [docs/COMMITLINT.md](docs/COMMITLINT.md).
 | Etapa | Disciplina | Entregável | Status |
 |-------|-----------|-----------|--------|
 | **0** | — | Documentação inicial e definições | 🟡 Em andamento |
-| **1** | Deploy em Nuvem | API FastAPI em Docker + decisão arquitetural | ⬜ Não iniciada |
+| **1** | Deploy em Nuvem | API FastAPI em Docker + decisão arquitetural | ✅ Concluída |
 | **2** | CI/CD e Pipeline de Treino | Workflow GitHub Actions + DAG Airflow | ⬜ Não iniciada |
-| **3** | Monitoração de Performance | Docker Compose + dashboard Grafana | ⬜ Não iniciada |
-| **4** | Latência em Modelos Não Estruturados | Modelo otimizado + comparativo + vídeo | ⬜ Não iniciada |
+| **3** | Monitoração de Performance | Docker Compose + dashboard Grafana | ✅ Concluída |
+| **4** | Latência em Modelos Não Estruturados | Modelo otimizado + comparativo + vídeo | 🟡 Em andamento |
 
 > 📄 Detalhamento de tarefas e critérios de aceite em **[docs/ROADMAP.md](docs/ROADMAP.md)**.
 

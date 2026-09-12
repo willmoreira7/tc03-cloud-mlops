@@ -12,7 +12,7 @@
 | [0 — Fundação](#-etapa-0--fundação-do-repositório) | — | — | 🟡 Em andamento |
 | [1 — Arquitetura e API](#-etapa-1--decisão-arquitetural-e-api-inicial) | Deploy em Nuvem | 15% (doc) | ✅ Concluída |
 | [2 — CI/CD e Pipeline](#-etapa-2--cicd-e-pipeline-automatizado) | CI/CD e Pipeline de Treino | 30% | ⬜ Não iniciada |
-| [3 — Monitoramento](#-etapa-3--monitoramento-e-observabilidade) | Monitoração de Performance | 20% | ⬜ Não iniciada |
+| [3 — Monitoramento](#-etapa-3--monitoramento-e-observabilidade) | Monitoração de Performance | 20% | ✅ Concluída |
 | [4 — Otimização e Entrega](#-etapa-4--otimização-de-latência-e-entrega) | Latência em Modelos Não Estruturados | 35% | 🟡 Modelo selecionado; otimização pendente |
 
 **Legenda:** ⬜ não iniciada · 🟡 em andamento · ✅ concluída · 🔴 bloqueada
@@ -30,7 +30,7 @@ Conferência item a item do que o enunciado exige.
 | Pipeline CI/CD com GitHub Actions (lint → test → build) | ⬜ | Etapa 2 |
 | Script ou DAG Airflow para treino/retreino | ⬜ | Etapa 2 |
 | Dockerfile funcional para o serviço de inferência | ✅ | `Dockerfile` + `docker-compose.yml` |
-| Stack de monitoramento local (API + Prometheus + Grafana) | ⬜ | Etapa 3 |
+| Stack de monitoramento local (API + Prometheus + Grafana) | ✅ | Etapa 3 |
 | Histórico de commits semântico e organizado | ✅ | [COMMITLINT.md](COMMITLINT.md) |
 
 ### Bibliotecas requeridas
@@ -39,7 +39,7 @@ Conferência item a item do que o enunciado exige.
 |-----------|-------------|--------|
 | Scikit-Learn | Modelo base de classificação de texto | ✅ TF-IDF + LinearSVC / LogReg / RF |
 | FastAPI | Construção da API | ✅ `src/api/` |
-| Prometheus-client | Instrumentação de métricas | ⬜ Etapa 3 |
+| Prometheus-client | Instrumentação de métricas | ✅ `src/api/metrics.py` |
 | Airflow | Orquestração de tarefas | ⬜ Etapa 2 |
 
 ### Boas práticas obrigatórias
@@ -48,7 +48,7 @@ Conferência item a item do que o enunciado exige.
 |---------|-----------|--------|
 | CI/CD com ≥ 2 automações | lint + testes | ⬜ Etapa 2 |
 | DAG Airflow funcional | dados → treino → salvamento | ⬜ Etapa 2 |
-| Dashboard Grafana | ≥ 3 painéis | ⬜ Etapa 3 |
+| Dashboard Grafana | ≥ 3 painéis | ✅ Etapa 3 (4 painéis) |
 | Otimização de performance | ≥ 1 técnica (ONNX, quantização ou pruning) | ⬜ Etapa 4 |
 
 ### Dataset
@@ -204,11 +204,11 @@ Workflow YAML no repositório + arquivo `.py` da DAG do Airflow.
 
 ### Tarefas
 
-- [ ] Instrumentar a API com `prometheus_client`
-- [ ] Expor contagem de chamadas e tempo de requisição
-- [ ] Configurar `docker-compose.yml` com API + Prometheus + Grafana
-- [ ] Criar dashboard no Grafana e exportar o JSON para o repositório
-- [ ] Gerar carga sintética para popular os gráficos
+- [x] Instrumentar a API com `prometheus_client`
+- [x] Expor contagem de chamadas e tempo de requisição
+- [x] Configurar `docker-compose.yml` com API + Prometheus + Grafana
+- [x] Criar dashboard no Grafana e exportar o JSON para o repositório
+- [x] Gerar carga sintética para popular os gráficos
 
 ### Painéis obrigatórios (mínimo 3)
 
@@ -225,7 +225,20 @@ Docker Compose rodando a stack completa + print/JSON do dashboard.
 
 ### ✅ Critério de aceite
 
-`docker compose up` sobe os três serviços e o dashboard exibe dados reais após carga.
+- [x] `docker compose up` sobe os três serviços e o dashboard exibe dados reais após carga.
+
+### 📊 Entregue
+
+| Item | Arquivo |
+|------|---------|
+| Instrumentação da API | [`src/api/metrics.py`](../src/api/metrics.py) |
+| Configuração do Prometheus | [`monitoring/prometheus/prometheus.yml`](../monitoring/prometheus/prometheus.yml) |
+| Regras de alerta (RED) | [`monitoring/prometheus/rules/triagem.yml`](../monitoring/prometheus/rules/triagem.yml) |
+| Provisionamento Grafana | [`monitoring/grafana/provisioning/`](../monitoring/grafana/provisioning/) |
+| Dashboard (4 painéis) | [`monitoring/grafana/dashboards/triagem-laudos.json`](../monitoring/grafana/dashboards/triagem-laudos.json) |
+| Stack Compose | [`docker-compose.yml`](../docker-compose.yml) |
+| Carga sintética | [`scripts/generate_load.py`](../scripts/generate_load.py) |
+| Testes do `/metrics` | [`tests/test_metrics.py`](../tests/test_metrics.py) |
 
 ---
 

@@ -1,0 +1,11 @@
+# Provider de dashboards: carrega os JSONs versionados em
+# monitoring/grafana/dashboards/ na pasta "Triagem" do Grafana.
+
+apiVersion: 1
+
+providers:
+  - name: triagem-dashboards
+    folder: Triagem
+    type: file
+    options:
+      path: /etc/grafana/dashboards
