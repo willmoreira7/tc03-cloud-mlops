@@ -62,6 +62,11 @@ MODEL_INFO = Info(
 def install_metrics(app: FastAPI) -> None:
     """Wires the metrics middleware and the /metrics endpoint to the app.
 
+    The ASGI app from ``prometheus_client`` is mounted at ``/metrics/`` (with
+    trailing slash). FastAPI/Starlette redirects ``/metrics`` to ``/metrics/``
+    by default, and the Prometheus scrape config points at ``/metrics/`` to
+    avoid that extra redirect on every scrape.
+
     Args:
         app: The FastAPI application to instrument.
     """
@@ -91,6 +96,10 @@ async def _metrics_middleware(
         Exception: Whatever the handler raised, after being recorded.
     """
     endpoint = request.url.path
+    # Normalises /metrics and /metrics/ to the same label so the redirect
+    # does not fragment the series into two endpoints.
+    if endpoint == "/metrics/":
+        endpoint = "/metrics"
     start = time.perf_counter()
     status_code = "500"
 

@@ -66,14 +66,21 @@ def main() -> None:
     """Entry point: parses args, runs workers, prints a summary."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--url", default="http://localhost:8000")
-    parser.add_argument("--duration", type=int, default=60,
-                        help="Segundos de carga a gerar (default: 60).")
-    parser.add_argument("--workers", type=int, default=4,
-                        help="Requisicoes concorrentes (default: 4).")
+    parser.add_argument(
+        "--duration",
+        type=int,
+        default=60,
+        help="Segundos de carga a gerar (default: 60).",
+    )
+    parser.add_argument(
+        "--workers", type=int, default=4, help="Requisicoes concorrentes (default: 4)."
+    )
     args = parser.parse_args()
 
-    print(f"Gerando carga contra {args.url} por {args.duration}s "
-          f"com {args.workers} workers...")
+    print(
+        f"Gerando carga contra {args.url} por {args.duration}s "
+        f"com {args.workers} workers..."
+    )
 
     stop = threading.Event()
     workers = [
@@ -100,8 +107,10 @@ def main() -> None:
         w.join(timeout=5.0)
 
     elapsed = time.perf_counter() - start
-    print(f"Concluido em {elapsed:.1f}s. "
-          "Abra o Grafana em http://localhost:3000 (admin/admin).")
+    print(
+        f"Concluido em {elapsed:.1f}s. "
+        "Abra o Grafana em http://localhost:3000 (admin/admin)."
+    )
 
 
 if __name__ == "__main__":
