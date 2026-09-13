@@ -397,7 +397,7 @@ na pasta *Triagem* do Grafana a partir de
 | Painel | Métrica base | PromQL |
 |--------|-------------|-------|
 | Total de requisições | `triagem_requests_total` | `sum(increase(triagem_requests_total[$__range]))` |
-| Latência P50/P95/P99 | `triagem_latency_seconds` | `histogram_quantile(0.95, sum(rate(..._bucket[5m])) by (le))` |
+| Latência P50/P95/P99 do `/predict` | `triagem_latency_seconds` | `histogram_quantile(0.95, sum(rate(..._bucket{endpoint="/predict"}[5m])) by (le))` |
 | Taxa de erro (5xx) | `triagem_requests_total{status=~"5.."}` | `sum(rate(...{status=~"5.."}[5m])) / sum(rate(...[5m]))` |
 | Distribuição das classes | `triagem_predictions_total` | `sum(increase(...[$__range])) by (urgencia)` |
 
@@ -408,8 +408,10 @@ uv run python scripts/generate_load.py --url http://localhost:8000 --duration 60
 ```
 
 A instrumentação da API vive em [`src/api/metrics.py`](src/api/metrics.py) e segue o
-método **RED** (Rate, Errors, Duration) com `prometheus_client`. O `/metrics` é
-exposto em `/metrics` via ASGI app do `prometheus_client`.
+método **RED** (Rate, Errors, Duration) com `prometheus_client`. O scrape do Prometheus
+usa `/metrics/`, exposto via ASGI app do `prometheus_client`.
+
+O guia completo da Etapa 3 está em [`docs/MONITORING.md`](docs/MONITORING.md).
 
 ---
 
@@ -447,6 +449,7 @@ exposto em `/metrics` via ASGI app do `prometheus_client`.
 | [docs/ARQUITETURA.md](docs/ARQUITETURA.md) | Decisão arquitetural de nuvem, batch vs. real-time, trade-offs |
 | [docs/NOTEBOOKS.md](docs/NOTEBOOKS.md) | Fluxo de notebooks, métricas e **critério de promoção do modelo** |
 | [docs/MODEL_CARD.md](docs/MODEL_CARD.md) | Model Card do modelo promovido — uso pretendido, limitações, vieses |
+| [docs/MONITORING.md](docs/MONITORING.md) | Como validar Prometheus, Grafana, métricas, queries e dashboard da Etapa 3 |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Etapas, tarefas, entregáveis e critérios de aceite |
 | [docs/DATASET.md](docs/DATASET.md) | Escolha do dataset, esquema e estratégia de rotulagem |
 | [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Fluxo de branches, PRs e ambiente local |

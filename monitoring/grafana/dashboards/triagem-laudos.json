@@ -156,7 +156,7 @@
     },
     {
       "datasource": "Prometheus",
-      "description": "Latencia de resposta por percentil. O P95 e o numero que sustenta o SLO; a distancia P50-P99 mostra se o problema e de cauda.",
+      "description": "Latencia de resposta do endpoint /predict por percentil. O P95 e o numero que sustenta o SLO; a distancia P50-P99 mostra se o problema e de cauda.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "palette-classic" },
@@ -205,17 +205,17 @@
       "pluginVersion": "11.0.0",
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum(rate(triagem_latency_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.50, sum(rate(triagem_latency_seconds_bucket{endpoint=\"/predict\"}[5m])) by (le))",
           "legendFormat": "P50",
           "refId": "A"
         },
         {
-          "expr": "histogram_quantile(0.95, sum(rate(triagem_latency_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(triagem_latency_seconds_bucket{endpoint=\"/predict\"}[5m])) by (le))",
           "legendFormat": "P95",
           "refId": "B"
         },
         {
-          "expr": "histogram_quantile(0.99, sum(rate(triagem_latency_seconds_bucket[5m])) by (le))",
+          "expr": "histogram_quantile(0.99, sum(rate(triagem_latency_seconds_bucket{endpoint=\"/predict\"}[5m])) by (le))",
           "legendFormat": "P99",
           "refId": "C"
         }
@@ -229,7 +229,7 @@
           "visible": true
         }
       ],
-      "title": "Latencia de Resposta (P50 / P95 / P99)",
+      "title": "Latencia do /predict (P50 / P95 / P99)",
       "type": "timeseries"
     }
   ],

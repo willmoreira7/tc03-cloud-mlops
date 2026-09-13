@@ -236,6 +236,7 @@ Docker Compose rodando a stack completa + print/JSON do dashboard.
 | Regras de alerta (RED) | [`monitoring/prometheus/rules/triagem.yml`](../monitoring/prometheus/rules/triagem.yml) |
 | Provisionamento Grafana | [`monitoring/grafana/provisioning/`](../monitoring/grafana/provisioning/) |
 | Dashboard (4 painéis) | [`monitoring/grafana/dashboards/triagem-laudos.json`](../monitoring/grafana/dashboards/triagem-laudos.json) |
+| Guia de validação | [`docs/MONITORING.md`](MONITORING.md) |
 | Stack Compose | [`docker-compose.yml`](../docker-compose.yml) |
 | Carga sintética | [`scripts/generate_load.py`](../scripts/generate_load.py) |
 | Testes do `/metrics` | [`tests/test_metrics.py`](../tests/test_metrics.py) |
