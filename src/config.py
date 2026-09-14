@@ -8,6 +8,7 @@ change.
 
 from __future__ import annotations
 
+import os
 import random
 from functools import lru_cache
 from pathlib import Path
@@ -18,11 +19,19 @@ import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
+# Data and model locations can be redirected through the environment. The
+# pipeline test uses this to run end to end in a temporary directory without
+# touching the developer's real corpus or the artefact the API serves.
+DATA_DIR = Path(os.environ.get("TC03_DATA_DIR", PROJECT_ROOT / "data"))
+MODELS_DIR = Path(os.environ.get("TC03_MODELS_DIR", PROJECT_ROOT / "models"))
+
 CONFIG_PATH = PROJECT_ROOT / "configs" / "model_config.yaml"
-DATA_RAW = PROJECT_ROOT / "data" / "raw"
-DATA_PROCESSED = PROJECT_ROOT / "data" / "processed"
-MODELS_DIR = PROJECT_ROOT / "models"
+DATA_RAW = DATA_DIR / "raw"
+DATA_PROCESSED = DATA_DIR / "processed"
 EVALUATION_DIR = MODELS_DIR / "evaluation"
+# Freshly trained models wait here until they pass the quality gate. Only
+# publishing moves an artefact to the path the API loads from.
+STAGING_DIR = MODELS_DIR / "_staging"
 NOTEBOOK_OUTPUTS = PROJECT_ROOT / "notebooks" / "outputs"
 
 

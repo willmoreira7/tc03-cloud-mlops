@@ -56,12 +56,19 @@ def search_best_params(
     return best, log.reset_index(drop=True)
 
 
-def run_candidate(candidate: str, persist: bool = True) -> dict[str, Any]:
+def run_candidate(
+    candidate: str,
+    persist: bool = True,
+    output_dir: Path | None = None,
+) -> dict[str, Any]:
     """Trains, evaluates and persists one candidate end to end.
 
     Args:
         candidate: Key in ``CANDIDATES``.
-        persist: Whether to write the model and metrics to ``models/``.
+        persist: Whether to write the model and metrics to disk.
+        output_dir: Where to write them; defaults to ``models/<candidate>``.
+            The retraining pipeline points this at a staging directory so an
+            unvalidated model never lands where the API reads from.
 
     Returns:
         Mapping with the fitted model, chosen parameters, search log,
@@ -81,7 +88,7 @@ def run_candidate(candidate: str, persist: bool = True) -> dict[str, Any]:
     test_metrics = quality_metrics(test[LABEL_COLUMN], test_pred)
     latency = measure_latency(model, test[TEXT_COLUMN].tolist())
 
-    output_dir = MODELS_DIR / candidate
+    output_dir = output_dir or MODELS_DIR / candidate
     result = {
         "candidate": candidate,
         "model": model,
