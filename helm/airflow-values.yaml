@@ -5,6 +5,10 @@
 #     -n airflow -f airflow-values.yaml \
 #     --set createUserJob.defaultUser.password="$(kubectl -n airflow get secret airflow-admin -o jsonpath='{.data.password}' | base64 -d)"
 #
+# Antes do install, crie o PVC de dados/modelos do pipeline (fora do chart,
+# que nao cria PVCs arbitrarios):
+#   kubectl apply -f airflow-tc03-data-pvc.yaml
+#
 # Segredos NAO ficam neste arquivo. Sao criados antes do install:
 #   airflow-fernet-key, airflow-api-secret-key, airflow-jwt-secret,
 #   airflow-metadata (conexao com o Postgres), airflow-postgresql (senha do Postgres),
@@ -25,9 +29,11 @@ defaultAirflowTag: "3.3.1"
 # Conexoes resolvidas por DNS; sem variaveis de ambiente de Service Links.
 enableServiceLinks: false
 
-# Cluster pequeno (2x t3.large): KubernetesExecutor dispensa Redis e workers
-# Celery ociosos. Cada task sobe um pod e morre ao terminar.
-executor: KubernetesExecutor
+# LocalExecutor: as tasks rodam como subprocessos do scheduler. Sem Redis, sem
+# workers e -- o motivo principal -- todas as tasks enxergam o mesmo disco
+# (PVC airflow-tc03-data), entao o que preprocess_data grava chega ao
+# train_model sem precisar de storage compartilhado (EFS/S3).
+executor: LocalExecutor
 
 # Segredos gerenciados fora do Helm para nao serem regenerados a cada upgrade
 # (o que reiniciaria todos os componentes).
@@ -58,6 +64,8 @@ dags:
   gitSync:
     enabled: true
     repo: https://github.com/willmoreira7/tc03-cloud-mlops.git
+    # git-sync v4 le GITSYNC_REF; branch fica para a variavel legada.
+    ref: main
     branch: main
     rev: HEAD
     depth: 1
@@ -98,9 +106,29 @@ apiServer:
 
 scheduler:
   replicas: 1
+  # O treino roda dentro deste pod (LocalExecutor).
   resources:
-    requests: { cpu: 200m, memory: 512Mi }
-    limits: { memory: 1Gi }
+    requests: { cpu: 250m, memory: 1Gi }
+    limits: { memory: 3Gi }
+  # PVC RWO (gp2): o pod antigo precisa soltar o volume antes do novo subir.
+  strategy:
+    type: Recreate
+  env:
+    # Raiz do repositorio sincronizado pelo git-sync: torna `src` importavel.
+    - name: PYTHONPATH
+      value: /opt/airflow/dags/repo
+    # O repositorio e montado somente leitura; dados e modelos vao para o PVC.
+    - name: TC03_DATA_DIR
+      value: /opt/airflow/tc03/data
+    - name: TC03_MODELS_DIR
+      value: /opt/airflow/tc03/models
+  extraVolumes:
+    - name: tc03-data
+      persistentVolumeClaim:
+        claimName: airflow-tc03-data
+  extraVolumeMounts:
+    - name: tc03-data
+      mountPath: /opt/airflow/tc03
   logGroomerSidecar:
     resources:
       requests: { cpu: 10m, memory: 32Mi }
@@ -130,12 +158,12 @@ triggerer:
       requests: { cpu: 10m, memory: 32Mi }
       limits: { memory: 128Mi }
 
-# Pods de task do KubernetesExecutor
+# Sem workers com LocalExecutor. Persistence desligada para o scheduler ser um
+# Deployment com o PVC airflow-tc03-data, e nao um StatefulSet com PVC de logs.
 workers:
-  kubernetes:
-    resources:
-      requests: { cpu: 200m, memory: 512Mi }
-      limits: { memory: 2Gi }
+  celery:
+    persistence:
+      enabled: false
 
 # Metricas do Airflow expostas em formato Prometheus (porta 9102). O chart ja
 # anota o Service com prometheus.io/scrape, entao o Prometheus descobre sozinho.
@@ -160,7 +188,8 @@ ingress:
   apiServer:
     enabled: true
     ingressClassName: alb
-    host: airflow.pocsarcotech.com
+    hosts:
+      - name: airflow.pocsarcotech.com
     path: /
     pathType: Prefix
     annotations:
