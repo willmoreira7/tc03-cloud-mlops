@@ -118,9 +118,10 @@ O retreino é uma carga **batch, agendada e desacoplada da inferência**.
 |---------|-----------|
 | Orquestrador | Apache Airflow (DAG local via Docker no escopo do desafio) |
 | Execução em nuvem (equivalente) | Job em container disparado por EventBridge Scheduler, ou MWAA se o Airflow for gerenciado |
-| Fluxo da DAG | `ingest_data` → `train_model` → `evaluate` → `export_onnx` |
-| Artefato de saída | Modelo `.onnx` versionado, consumido pela API na inicialização |
-| Gatilho | Agendado (periódico); degradação de métricas fica fora do escopo desta fase |
+| Fluxo da DAG | `ingest_data` → `preprocess_data` → `train_model` → `evaluate_model` → `publish_model` (`export_onnx` entra na Etapa 4) |
+| Artefato de saída | Hoje `model.pkl` + `metrics.json` em `models/<modelo>/`; `.onnx` a partir da Etapa 4 |
+| Gatilho | Agendado (`@weekly`) ou manual; degradação de métricas fica fora do escopo desta fase |
+| Promoção | Só publica se passar no quality gate (ADR 13) |
 
 **Princípio:** treino e inferência nunca compartilham o mesmo processo. A API apenas
 carrega um artefato pronto — isso mantém o serviço leve e o tempo de startup baixo.
@@ -149,7 +150,7 @@ carrega um artefato pronto — isso mantém o serviço leve e o tempo de startup
 
    ┌───────────────────────────────────────────────┐
    │  Job em container / Airflow — retreino agendado│
-   │  ingest → train → evaluate → export_onnx      │
+   │  ingest → preprocess → train → evaluate → publish│
    └───────────────────┬───────────────────────────┘
                        ▼
               Artefato de modelo (S3)
@@ -177,6 +178,9 @@ carrega um artefato pronto — isso mantém o serviço leve e o tempo de startup
 | 10 | API serve `tfidf_logreg`, não o promovido `tfidf_linear_svc` | ✅ Aceita | Empate técnico entre os dois; o LogReg expõe `predict_proba` e permite score de confiança |
 | 11 | Notebooks versionados **com** as saídas; sem `nbstripout` | ✅ Aceita | Quem clona vê o resultado da análise sem executar nada. Reavaliar se o corpus passar a ter dado clínico real |
 | 12 | `nbqa` roda o `ruff` nos notebooks | ✅ Aceita | O código da análise não pode ser a única parte do projeto sem lint |
+| 13 | Retreino passa por **quality gate** antes de publicar | ✅ Aceita | Um modelo que não seria promovido na análise não pode chegar à API só porque o job rodou; o gate reusa `promotion.py` |
+| 14 | Airflow em imagem e compose próprios, fora do `pyproject.toml` | ✅ Aceita | Evita conflito de dependências com a API; libs de treino fixadas pelo `uv.lock` para o pickle ser compatível |
+| 15 | CI treina sobre corpus sintético | ✅ Aceita | O dataset real não é versionado; o CI valida o pipeline, não a qualidade do modelo |
 
 > ℹ️ **Sobre a ADR 10.** A regra de promoção elegeu o `tfidf_linear_svc`, mas a
 > diferença para o `tfidf_logreg` é de 0,0093 em F1-macro — dentro do limiar de empate
@@ -235,4 +239,4 @@ otimização em vez de demonstrá-la.
 
 ---
 
-**Última atualização:** 2026-09-05
+**Última atualização:** 2026-09-14

@@ -11,7 +11,7 @@
 |-------|-----------|------------------|--------|
 | [0 — Fundação](#-etapa-0--fundação-do-repositório) | — | — | 🟡 Em andamento |
 | [1 — Arquitetura e API](#-etapa-1--decisão-arquitetural-e-api-inicial) | Deploy em Nuvem | 15% (doc) | ✅ Concluída |
-| [2 — CI/CD e Pipeline](#-etapa-2--cicd-e-pipeline-automatizado) | CI/CD e Pipeline de Treino | 30% | ⬜ Não iniciada |
+| [2 — CI/CD e Pipeline](#-etapa-2--cicd-e-pipeline-automatizado) | CI/CD e Pipeline de Treino | 30% | ✅ Concluída |
 | [3 — Monitoramento](#-etapa-3--monitoramento-e-observabilidade) | Monitoração de Performance | 20% | ⬜ Não iniciada |
 | [4 — Otimização e Entrega](#-etapa-4--otimização-de-latência-e-entrega) | Latência em Modelos Não Estruturados | 35% | 🟡 Modelo selecionado; otimização pendente |
 
@@ -27,8 +27,8 @@ Conferência item a item do que o enunciado exige.
 
 | Requisito | Status | Onde |
 |-----------|--------|------|
-| Pipeline CI/CD com GitHub Actions (lint → test → build) | ⬜ | Etapa 2 |
-| Script ou DAG Airflow para treino/retreino | ⬜ | Etapa 2 |
+| Pipeline CI/CD com GitHub Actions (lint → test → build) | ✅ | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) |
+| Script ou DAG Airflow para treino/retreino | ✅ | [`airflow/dags/retreino_triagem.py`](../airflow/dags/retreino_triagem.py) + `scripts/train_serving_model.py` |
 | Dockerfile funcional para o serviço de inferência | ✅ | `Dockerfile` + `docker-compose.yml` |
 | Stack de monitoramento local (API + Prometheus + Grafana) | ⬜ | Etapa 3 |
 | Histórico de commits semântico e organizado | ✅ | [COMMITLINT.md](COMMITLINT.md) |
@@ -40,14 +40,14 @@ Conferência item a item do que o enunciado exige.
 | Scikit-Learn | Modelo base de classificação de texto | ✅ TF-IDF + LinearSVC / LogReg / RF |
 | FastAPI | Construção da API | ✅ `src/api/` |
 | Prometheus-client | Instrumentação de métricas | ⬜ Etapa 3 |
-| Airflow | Orquestração de tarefas | ⬜ Etapa 2 |
+| Airflow | Orquestração de tarefas | ✅ `airflow/` (3.3.1) |
 
 ### Boas práticas obrigatórias
 
 | Prática | Exigência | Status |
 |---------|-----------|--------|
-| CI/CD com ≥ 2 automações | lint + testes | ⬜ Etapa 2 |
-| DAG Airflow funcional | dados → treino → salvamento | ⬜ Etapa 2 |
+| CI/CD com ≥ 2 automações | lint + testes | ✅ 5 jobs: lint, testes, build, DAG, commitlint |
+| DAG Airflow funcional | dados → treino → salvamento | ✅ Executada de ponta a ponta no CI |
 | Dashboard Grafana | ≥ 3 painéis | ⬜ Etapa 3 |
 | Otimização de performance | ≥ 1 técnica (ONNX, quantização ou pruning) | ⬜ Etapa 4 |
 
@@ -170,13 +170,16 @@ mas afeta tempo de build e de deploy.
 
 ### Tarefas
 
-- [ ] Criar workflow GitHub Actions disparado em `push` e `pull_request`
-- [ ] Automação 1 — **lint** (ex.: `ruff` ou `flake8`)
-- [ ] Automação 2 — **testes** (`pytest`)
-- [ ] _(opcional)_ Automação 3 — rodar o pipeline sobre dados sintéticos e validar artefatos
-- [ ] Desenvolver a DAG do Airflow simulando o treinamento
-- [ ] Task de leitura do CSV de dados
-- [ ] Task de treino e salvamento do modelo
+- [x] Criar workflow GitHub Actions disparado em `push` e `pull_request`
+- [x] Automação 1 — **lint** (`ruff`, `ruff format`, `nbqa ruff`)
+- [x] Automação 2 — **testes** (`pytest` com cobertura)
+- [x] Automação 3 — rodar o pipeline sobre dados sintéticos e validar artefatos
+- [x] Automação 4 — **build** da imagem e smoke test do container
+- [x] Automação 5 — construir o Airflow e executar a DAG no CI
+- [x] Desenvolver a DAG do Airflow simulando o treinamento
+- [x] Task de leitura do CSV de dados
+- [x] Task de treino e salvamento do modelo
+- [x] Quality gate entre treino e publicação
 
 > 💡 A automação 3 gera dados sintéticos no CI, roda o pipeline completo e verifica que
 > os artefatos saem. Resolve o problema de não poder versionar o dataset real e vai além
@@ -187,13 +190,48 @@ mas afeta tempo de build e de deploy.
 
 ### 📦 Entregável
 
-Workflow YAML no repositório + arquivo `.py` da DAG do Airflow.
+✅ [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) + [`airflow/dags/retreino_triagem.py`](../airflow/dags/retreino_triagem.py).
 
 ### ✅ Critério de aceite
 
-- Badge do workflow verde na branch principal
-- Mínimo de **2 automações** rodando (exigência do enunciado)
-- DAG carrega no Airflow sem erro de import e executa fim a fim
+- [ ] Badge do workflow verde na branch principal _(confirmar após o merge)_
+- [x] Mínimo de **2 automações** rodando (exigência do enunciado)
+- [x] DAG carrega no Airflow sem erro de import e executa fim a fim
+
+### 🧩 Como foi entregue
+
+```
+            src/pipeline/stages.py
+   ingest → preprocess → train → evaluate → publish
+        ▲                   ▲                  ▲
+        │                   │                  │
+ train_serving_model.py   DAG Airflow      job "test" do CI
+```
+
+- **Uma implementação, três chamadores.** Script, DAG e CI chamam as mesmas funções de
+  `src/pipeline/stages.py`. A DAG não tem lógica própria, só orquestra.
+- **Quality gate.** O modelo retreinado vai para `models/_staging/<run_id>/` e só é
+  publicado se passar no critério de promoção de `src/evaluation/promotion.py`, o mesmo
+  dos notebooks. Reprovado, a task falha **sem retry** (retreinar sobre os mesmos dados
+  daria o mesmo resultado) e a API continua servindo o modelo anterior.
+- **Publicação atômica.** Cada arquivo é copiado ao lado do destino e renomeado sobre
+  ele: um container que suba durante a publicação lê o modelo antigo ou o novo, nunca um
+  pickle pela metade.
+- **Rastreabilidade.** O `metrics.json` publicado carrega `run_id`, data de publicação e
+  o SHA256 dos arquivos de dados usados no treino.
+- **Airflow isolado.** Imagem própria com as bibliotecas de treino nas versões do
+  `uv.lock`, em compose separado da API. Ver ADRs 13–15 em [ARQUITETURA.md](ARQUITETURA.md).
+
+### 🔍 Validação realizada
+
+| Verificação | Resultado |
+|-------------|-----------|
+| Pipeline via script, dados sintéticos (3.000 linhas) | ✅ Aprovado no gate e publicado em ~7 s |
+| `airflow dags test` com as 5 tasks | ✅ `success` |
+| DAG disparada pelo scheduler (UI/CLI) | ✅ 5 tasks em `success`, 1ª tentativa |
+| Gate com limiar impossível (`min_recall_urgente: 1.01`) | ✅ `evaluate_model` falha sem retry, `publish_model` não roda, artefato fica no staging |
+| DAG quebrada detectada por `list-import-errors --local` | ✅ exit 1 |
+| Imagem da API com modelo treinado pelo Airflow | ✅ `/health` ok, `/predict` 200, texto curto 422 |
 
 ---
 
@@ -295,7 +333,7 @@ Modelo otimizado + resultados comparativos de latência + Model Card + link do v
 | Risco | Impacto | Mitigação |
 |-------|---------|-----------|
 | Dataset não definido trava as Etapas 2 e 4 | 🔴 Alto | Fechar a escolha ainda na Etapa 0 — ver [DATASET.md](DATASET.md) |
-| Airflow local é pesado para subir | 🟡 Médio | Usar imagem oficial em Compose separado do stack de inferência |
+| Airflow local é pesado para subir | 🟢 Baixo | ✅ Mitigado: modo `standalone` num único container, em compose separado da API |
 | `TfidfVectorizer` não converter para ONNX | 🔴 Alto | Validar a conversão já na Etapa 1, com pipeline mínimo; contingência é quantização |
 | Ganho de latência do ONNX ser marginal em modelo já leve | 🟡 Médio | Medir com rigor; ganho pequeno bem medido vale mais que número inflado |
 | Nenhum modelo passar nas restrições de promoção | 🟡 Médio | Limiares definidos na Etapa 0 devem ser realistas; revisá-los exige registrar a mudança |
@@ -304,4 +342,4 @@ Modelo otimizado + resultados comparativos de latência + Model Card + link do v
 
 ---
 
-**Última atualização:** 2026-09-05
+**Última atualização:** 2026-09-14

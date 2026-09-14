@@ -1,5 +1,7 @@
 # 🏥 tc03-cloud-mlops — Triagem Automática de Laudos Médicos
 
+[![CI](https://github.com/willmoreira7/tc03-cloud-mlops/actions/workflows/ci.yml/badge.svg)](https://github.com/willmoreira7/tc03-cloud-mlops/actions/workflows/ci.yml)
+
 > Deploy de Modelo em Produção com Pipeline CI/CD, Monitoramento e Otimização de Latência.
 
 ---
@@ -53,7 +55,7 @@ ciclo de vida do modelo funcione de ponta a ponta:
 
    ┌──────────────────────────────────────────────────────────┐
    │  Airflow DAG (retreino)                                  │
-   │  ingest_data → train_model → evaluate → export_onnx      │
+   │  ingest → preprocess → train → evaluate (gate) → publish │
    └──────────────────────────────────────────────────────────┘
                                   │
                                   ▼
@@ -213,18 +215,20 @@ tc03-cloud-mlops/
 ├── models/                  # Artefatos de modelo — não versionados
 ├── notebooks/               # ✅ EDA, candidatos e comparação (01 a 07)
 ├── scripts/
-│   └── gen_synthetic_data.py # ✅ Corpus sintético para pipeline e CI
+│   ├── gen_synthetic_data.py   # ✅ Corpus sintético para pipeline e CI
+│   └── train_serving_model.py  # ✅ Pipeline de treino em um comando
 ├── src/
 │   ├── config.py            # ✅ Caminhos, seed e carregamento de config
 │   ├── data/                # ✅ Loader, limpeza, mapeamento e splits
 │   ├── evaluation/          # ✅ Métricas, latência e regra de promoção
 │   ├── models/              # ✅ Pipelines dos candidatos e rotina de experimento
+│   ├── pipeline/            # ✅ Etapas do retreino (script, DAG e CI)
 │   └── api/                 # ✅ Serviço FastAPI de inferência
 ├── tests/                   # ✅ Testes automatizados (pytest)
 ├── Dockerfile               # ✅ Imagem do serviço de inferência
 ├── docker-compose.yml       # ✅ Stack local (Prometheus/Grafana na Etapa 3)
-├── .github/workflows/       # ⬜ Pipelines de CI/CD (Etapa 2)
-├── airflow/dags/            # ⬜ DAG de treino/retreino (Etapa 2)
+├── .github/workflows/       # ✅ CI: lint → testes → build + DAG
+├── airflow/                 # ✅ DAG de retreino + Airflow local em Docker
 └── monitoring/              # ⬜ Prometheus e dashboards Grafana (Etapa 3)
 ```
 
@@ -312,7 +316,10 @@ docker compose up -d --build
 ```
 
 O passo 2 executa as mesmas etapas dos notebooks, na mesma ordem — os notebooks são o
-registro da análise, não um passo de build.
+registro da análise, não um passo de build. O modelo é treinado em `models/_staging/` e só
+é publicado em `models/tfidf_logreg/` se passar no **quality gate** (o mesmo critério de
+promoção dos notebooks); se for reprovado, o comando sai com erro e a API continua com o
+modelo anterior.
 
 Classificando um laudo:
 
@@ -356,7 +363,69 @@ uv run nbqa ruff notebooks/          # lint dentro dos notebooks
 ```
 
 > Os testes da API são pulados automaticamente se o artefato do modelo não existir —
-> rode `uv run python scripts/train_serving_model.py` antes.
+> rode `uv run python scripts/train_serving_model.py` antes. No CI a variável
+> `TC03_REQUIRE_MODEL=1` transforma esse skip em falha.
+
+### CI/CD (GitHub Actions)
+
+O workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) roda em todo pull request
+e em push na `main`:
+
+```
+lint ──┬──► test ──► build
+       └──► dag
+```
+
+| Job | O que valida |
+|-----|--------------|
+| **lint** | `ruff check`, `ruff format --check`, `nbqa ruff` e `uv.lock` sincronizado |
+| **test** | Gera corpus sintético, treina pelo pipeline completo e roda `pytest` com cobertura |
+| **build** | Constrói a imagem com o modelo do job anterior e faz smoke test em `/health` e `/predict` |
+| **dag** | Constrói a imagem do Airflow, checa erros de import e executa a DAG de ponta a ponta |
+| **commitlint** | Mensagens de commit do PR (só em pull request) |
+
+> O dataset real não é versionado, então o CI treina sobre dados sintéticos: ele prova que
+> o pipeline funciona, não a qualidade do modelo — essa está no
+> [MODEL_CARD.md](docs/MODEL_CARD.md).
+
+### Retreino com Airflow
+
+A DAG [`retreino_triagem`](airflow/dags/retreino_triagem.py) roda semanalmente e chama as
+mesmas funções de `src/pipeline/stages.py` que o script de treino:
+
+```
+ingest_data → preprocess_data → train_model → evaluate_model → publish_model
+```
+
+| Task | O que faz |
+|------|-----------|
+| `ingest_data` | Confere o corpus bruto e registra o SHA256 de cada arquivo |
+| `preprocess_data` | Mapeia urgência, limpa e grava os splits |
+| `train_model` | Treina o modelo servido em `models/_staging/<run_id>/` |
+| `evaluate_model` | **Quality gate**: recall `urgente` ≥ 0,60 e p95 ≤ 15 ms; falha sem retry |
+| `publish_model` | Move o artefato aprovado para `models/tfidf_logreg/` com troca atômica |
+
+```bash
+# 1. Corpus em data/raw/ (real ou sintético, como na seção da API)
+
+# 2. Suba o Airflow (compose separado da API; ~2 GB de RAM)
+echo "AIRFLOW_UID=$(id -u)" > airflow/.env
+docker compose -f airflow/docker-compose.yml up -d --build
+
+# UI ............ http://localhost:8080  (sem login: uso apenas local)
+
+# 3. Na UI, despause a DAG retreino_triagem e clique em "Trigger" — ou pelo terminal:
+docker compose -f airflow/docker-compose.yml exec airflow airflow dags unpause retreino_triagem
+docker compose -f airflow/docker-compose.yml exec airflow airflow dags trigger retreino_triagem
+
+# 4. Derrubar
+docker compose -f airflow/docker-compose.yml down
+```
+
+> ℹ️ O Airflow não está no `pyproject.toml`: tem dependências próprias que conflitariam
+> com as da API. A imagem em [`airflow/Dockerfile`](airflow/Dockerfile) instala as
+> bibliotecas de treino **nas versões exatas do `uv.lock`**, para que o pickle gerado pela
+> DAG seja carregável pela API.
 
 ### Padrão de commits (opcional, só para contribuir)
 
@@ -384,10 +453,10 @@ validar mensagens de commit. Ver [docs/COMMITLINT.md](docs/COMMITLINT.md).
 | Etapa | Disciplina | Entregável | Status |
 |-------|-----------|-----------|--------|
 | **0** | — | Documentação inicial e definições | 🟡 Em andamento |
-| **1** | Deploy em Nuvem | API FastAPI em Docker + decisão arquitetural | ⬜ Não iniciada |
-| **2** | CI/CD e Pipeline de Treino | Workflow GitHub Actions + DAG Airflow | ⬜ Não iniciada |
+| **1** | Deploy em Nuvem | API FastAPI em Docker + decisão arquitetural | ✅ Concluída |
+| **2** | CI/CD e Pipeline de Treino | Workflow GitHub Actions + DAG Airflow | ✅ Concluída |
 | **3** | Monitoração de Performance | Docker Compose + dashboard Grafana | ⬜ Não iniciada |
-| **4** | Latência em Modelos Não Estruturados | Modelo otimizado + comparativo + vídeo | ⬜ Não iniciada |
+| **4** | Latência em Modelos Não Estruturados | Modelo otimizado + comparativo + vídeo | 🟡 Modelo selecionado; otimização pendente |
 
 > 📄 Detalhamento de tarefas e critérios de aceite em **[docs/ROADMAP.md](docs/ROADMAP.md)**.
 
@@ -399,8 +468,8 @@ validar mensagens de commit. Ver [docs/COMMITLINT.md](docs/COMMITLINT.md).
 |----------|------|-----------------|
 | Modelagem e Otimização | 20% | Etapa 4 — ONNX/quantização + comparativo de latência |
 | Monitoramento | 20% | Etapa 3 — Compose + dashboard com 3+ painéis |
-| CI/CD (GitHub Actions) | 15% | Etapa 2 — lint + testes automatizados |
-| Orquestração (Airflow) | 15% | Etapa 2 — DAG de ingestão e treino |
+| CI/CD (GitHub Actions) | 15% | Etapa 2 — lint, testes, build da imagem e DAG no CI |
+| Orquestração (Airflow) | 15% | Etapa 2 — DAG de ingestão, treino, quality gate e publicação |
 | Documentação (README) | 15% | Este README + `docs/` |
 | Vídeo STAR (≤ 5 min) | 15% | Etapa 4 |
 
@@ -430,4 +499,4 @@ validar mensagens de commit. Ver [docs/COMMITLINT.md](docs/COMMITLINT.md).
 
 ---
 
-**Última atualização:** 2026-09-05
+**Última atualização:** 2026-09-14

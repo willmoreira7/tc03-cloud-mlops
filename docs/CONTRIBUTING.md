@@ -110,7 +110,7 @@ Decisões tomadas, limitações conhecidas ou pendências.
 | Regra | Detalhe |
 |-------|---------|
 | Revisão | Ao menos 1 aprovação de outro integrante |
-| CI | Workflow do GitHub Actions verde (a partir da Etapa 2) |
+| CI | Workflow do GitHub Actions verde ([ci.yml](../.github/workflows/ci.yml)) |
 | Estratégia | `Squash and merge`, mantendo mensagem no padrão semântico |
 | Limpeza | Deletar a branch após o merge |
 
