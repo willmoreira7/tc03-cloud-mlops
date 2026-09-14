@@ -1,0 +1,78 @@
+# Prometheus - chart prometheus-community/prometheus 29.30.0
+#
+#   helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+#   helm upgrade --install prometheus prometheus-community/prometheus --version 29.30.0 \
+#     -n monitoring -f prometheus-values.yaml
+#
+# Acesso: kubectl -n monitoring port-forward svc/prometheus-server 9090:80
+# URL interna (usada pelo Grafana): http://prometheus-server.monitoring.svc.cluster.local
+
+server:
+  # DNS: Ingress ALB compartilhado (group.name mlops-tools, um unico ALB para
+  # Airflow, Grafana e Prometheus) com HTTPS. Sem certificate-arn: o controller
+  # descobre no ACM o certificado que cobre o host (*.pocsarcotech.com).
+  # O registro no Route53 (zona publica pocsarcotech.com) e um alias A manual
+  # apontando para o ALB -- o cluster nao tem external-dns.
+  #
+  # Aberto para qualquer origem (lab de pos-graduacao). O Prometheus nao tem
+  # autenticacao: para restringir, adicione a anotacao
+  # alb.ingress.kubernetes.io/conditions.prometheus-server com source-ip.
+  ingress:
+    enabled: true
+    ingressClassName: alb
+    hosts:
+      - prometheus.pocsarcotech.com
+    path: /
+    pathType: Prefix
+    annotations:
+      alb.ingress.kubernetes.io/group.name: mlops-tools
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+      alb.ingress.kubernetes.io/ssl-redirect: "443"
+      alb.ingress.kubernetes.io/healthcheck-path: /-/healthy
+  retention: "7d"
+  retentionSize: "7GB"
+  persistentVolume:
+    enabled: true
+    size: 10Gi
+    storageClass: gp2
+  resources:
+    requests: { cpu: 200m, memory: 768Mi }
+    limits: { memory: 2Gi }
+  service:
+    type: ClusterIP
+  global:
+    scrape_interval: 30s
+    evaluation_interval: 30s
+
+configmapReload:
+  prometheus:
+    resources:
+      requests: { cpu: 5m, memory: 16Mi }
+      limits: { memory: 64Mi }
+
+# Alertas ficam para depois; sem Alertmanager e sem Pushgateway por ora.
+alertmanager:
+  enabled: false
+
+prometheus-pushgateway:
+  enabled: false
+
+kube-state-metrics:
+  enabled: true
+  resources:
+    requests: { cpu: 20m, memory: 64Mi }
+    limits: { memory: 256Mi }
+
+prometheus-node-exporter:
+  enabled: true
+  resources:
+    requests: { cpu: 20m, memory: 32Mi }
+    limits: { memory: 128Mi }
+
+# Os scrapeConfigs padrao do chart ja cobrem apiserver, nodes, cAdvisor e
+# qualquer Service/Pod com a anotacao prometheus.io/scrape: "true" -- e assim
+# que o statsd-exporter do Airflow (airflow/airflow-statsd:9102) e descoberto.
+# Scrapes adicionais entram aqui:
+extraScrapeConfigs: ""

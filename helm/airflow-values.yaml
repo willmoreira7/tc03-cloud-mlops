@@ -1,0 +1,180 @@
+# Apache Airflow - chart oficial apache-airflow/airflow 1.22.0
+#
+#   helm repo add apache-airflow https://airflow.apache.org
+#   helm upgrade --install airflow apache-airflow/airflow --version 1.22.0 \
+#     -n airflow -f airflow-values.yaml \
+#     --set createUserJob.defaultUser.password="$(kubectl -n airflow get secret airflow-admin -o jsonpath='{.data.password}' | base64 -d)"
+#
+# Segredos NAO ficam neste arquivo. Sao criados antes do install:
+#   airflow-fernet-key, airflow-api-secret-key, airflow-jwt-secret,
+#   airflow-metadata (conexao com o Postgres), airflow-postgresql (senha do Postgres),
+#   airflow-admin (senha do usuario admin da UI)
+#
+# Acesso: kubectl -n airflow port-forward svc/airflow-api-server 8080:8080
+#
+# Upgrade: com useHelmHooks=false os Jobs de migracao e de criacao de usuario
+# sao recursos comuns e imutaveis. Se o upgrade falhar com
+# 'cannot patch "airflow-create-user" with kind Job', apague os Jobs concluidos
+# (sao idempotentes) e rode o upgrade de novo:
+#   kubectl -n airflow delete job airflow-create-user airflow-run-airflow-migrations
+
+# Mesma versao do airflow/Dockerfile do tc03-cloud-mlops.
+airflowVersion: "3.3.1"
+defaultAirflowTag: "3.3.1"
+
+# Conexoes resolvidas por DNS; sem variaveis de ambiente de Service Links.
+enableServiceLinks: false
+
+# Cluster pequeno (2x t3.large): KubernetesExecutor dispensa Redis e workers
+# Celery ociosos. Cada task sobe um pod e morre ao terminar.
+executor: KubernetesExecutor
+
+# Segredos gerenciados fora do Helm para nao serem regenerados a cada upgrade
+# (o que reiniciaria todos os componentes).
+fernetKeySecretName: airflow-fernet-key
+apiSecretKeySecretName: airflow-api-secret-key
+jwtSecretName: airflow-jwt-secret
+
+data:
+  metadataSecretName: airflow-metadata
+
+postgresql:
+  enabled: true
+  auth:
+    existingSecret: airflow-postgresql
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+      storageClass: gp2
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { memory: 512Mi }
+
+# DAGs lidas direto do repositorio (publico). O subPath aponta para airflow/dags.
+dags:
+  persistence:
+    enabled: false
+  gitSync:
+    enabled: true
+    repo: https://github.com/willmoreira7/tc03-cloud-mlops.git
+    branch: main
+    rev: HEAD
+    depth: 1
+    subPath: airflow/dags
+    period: 60s
+    recommendedProbeSetting: true
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { memory: 128Mi }
+
+createUserJob:
+  useHelmHooks: false
+  applyCustomEnv: false
+  defaultUser:
+    role: Admin
+    username: admin
+    email: admin@example.com
+    firstName: admin
+    lastName: user
+    # password: passado via --set no install (ver cabecalho)
+
+migrateDatabaseJob:
+  useHelmHooks: false
+  applyCustomEnv: false
+
+apiServer:
+  replicas: 1
+  # Atras do ALB: respeita X-Forwarded-Proto/Host para gerar URLs https.
+  args: ["bash", "-c", "exec airflow api-server --proxy-headers"]
+  env:
+    - name: FORWARDED_ALLOW_IPS
+      value: "*"
+  resources:
+    requests: { cpu: 200m, memory: 1Gi }
+    limits: { memory: 2Gi }
+  service:
+    type: ClusterIP
+
+scheduler:
+  replicas: 1
+  resources:
+    requests: { cpu: 200m, memory: 512Mi }
+    limits: { memory: 1Gi }
+  logGroomerSidecar:
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { memory: 128Mi }
+
+dagProcessor:
+  enabled: true
+  resources:
+    requests: { cpu: 100m, memory: 512Mi }
+    limits: { memory: 1Gi }
+  logGroomerSidecar:
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { memory: 128Mi }
+
+triggerer:
+  replicas: 1
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClassName: gp2
+  resources:
+    requests: { cpu: 50m, memory: 256Mi }
+    limits: { memory: 512Mi }
+  logGroomerSidecar:
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { memory: 128Mi }
+
+# Pods de task do KubernetesExecutor
+workers:
+  kubernetes:
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+      limits: { memory: 2Gi }
+
+# Metricas do Airflow expostas em formato Prometheus (porta 9102). O chart ja
+# anota o Service com prometheus.io/scrape, entao o Prometheus descobre sozinho.
+statsd:
+  enabled: true
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { memory: 128Mi }
+
+redis:
+  enabled: false
+
+pgbouncer:
+  enabled: false
+
+# DNS: Ingress ALB compartilhado (group.name mlops-tools, um unico ALB para
+# Airflow, Grafana e Prometheus) com HTTPS. Sem certificate-arn: o controller
+# descobre no ACM o certificado que cobre o host (*.pocsarcotech.com).
+# O registro no Route53 (zona publica pocsarcotech.com) e um alias A manual
+# apontando para o ALB -- o cluster nao tem external-dns.
+ingress:
+  apiServer:
+    enabled: true
+    ingressClassName: alb
+    host: airflow.pocsarcotech.com
+    path: /
+    pathType: Prefix
+    annotations:
+      alb.ingress.kubernetes.io/group.name: mlops-tools
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+      alb.ingress.kubernetes.io/ssl-redirect: "443"
+      alb.ingress.kubernetes.io/healthcheck-path: /api/v2/monitor/health
+
+config:
+  api:
+    base_url: https://airflow.pocsarcotech.com
+  core:
+    load_examples: "False"
+  logging:
+    remote_logging: "False"
