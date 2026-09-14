@@ -2,7 +2,7 @@
 
 This is the Etapa 3 deliverable that makes the Grafana panels show real data
 after the stack comes up. It sends a mix of valid and invalid requests so the
-error-rate panel has something to display too.
+HTTP error-rate panel has 422 responses to display too.
 
 Usage:
     python scripts/generate_load.py --url http://localhost:8000 --duration 60
@@ -34,7 +34,7 @@ LAUDOS_VALIDOS = [
     "episodes and generalized edema of unclear origin.",
 ]
 
-# 1 in 10 requests is deliberately invalid so the 422 panel has signal.
+# 1 in 10 requests is deliberately invalid so the HTTP error panel has signal.
 LAUDOS_INVALIDOS = ["", "curto demais", "   "]
 
 

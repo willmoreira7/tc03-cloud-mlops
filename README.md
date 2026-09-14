@@ -398,7 +398,7 @@ na pasta *Triagem* do Grafana a partir de
 |--------|-------------|-------|
 | Total de requisições | `triagem_requests_total` | `sum(increase(triagem_requests_total[$__range]))` |
 | Latência P50/P95/P99 do `/predict` | `triagem_latency_seconds` | `histogram_quantile(0.95, sum(rate(..._bucket{endpoint="/predict"}[5m])) by (le))` |
-| Taxa de erro (5xx) | `triagem_requests_total{status=~"5.."}` | `sum(rate(...{status=~"5.."}[5m])) / sum(rate(...[5m]))` |
+| Taxa de erro HTTP (4xx/5xx) | `triagem_requests_total{status=~"4..|5.."}` | `sum(rate(...{status=~"4..|5.."}[5m])) / sum(rate(...[5m]))` |
 | Distribuição das classes | `triagem_predictions_total` | `sum(increase(...[$__range])) by (urgencia)` |
 
 Para popular os gráficos com carga sintética:

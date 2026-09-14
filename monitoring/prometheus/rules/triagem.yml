@@ -22,7 +22,7 @@ groups:
 
       - alert: TriagemLatenciaP95Alta
         expr: |
-          histogram_quantile(0.95, sum(rate(triagem_latency_seconds_bucket[5m])) by (le)) > 0.5
+          histogram_quantile(0.95, sum(rate(triagem_latency_seconds_bucket{endpoint="/predict"}[5m])) by (le)) > 0.5
         for: 10m
         labels:
           severity: warning

@@ -95,11 +95,6 @@ async def _metrics_middleware(
     Raises:
         Exception: Whatever the handler raised, after being recorded.
     """
-    endpoint = request.url.path
-    # Normalises /metrics and /metrics/ to the same label so the redirect
-    # does not fragment the series into two endpoints.
-    if endpoint == "/metrics/":
-        endpoint = "/metrics"
     start = time.perf_counter()
     status_code = "500"
 
@@ -109,8 +104,33 @@ async def _metrics_middleware(
         return response
     finally:
         elapsed = time.perf_counter() - start
+        endpoint = _endpoint_label(request)
         REQUESTS.labels(endpoint=endpoint, status=status_code).inc()
         LATENCY.labels(endpoint=endpoint).observe(elapsed)
+
+
+def _endpoint_label(request: Request) -> str:
+    """Returns a bounded endpoint label for Prometheus series.
+
+    Starlette records the matched route in the request scope after routing.
+    Using that route path keeps parameterised routes and random scanner paths
+    from creating unbounded time series. Requests that do not match any route
+    are grouped under ``unmatched``.
+
+    Args:
+        request: The incoming HTTP request.
+
+    Returns:
+        The route path, ``/metrics`` for both metrics URLs, or ``unmatched``.
+    """
+    route = request.scope.get("route")
+    route_path = getattr(route, "path", None)
+    if route_path:
+        return "/metrics" if route_path == "/metrics/{path:path}" else route_path
+
+    if request.url.path in {"/metrics", "/metrics/"}:
+        return "/metrics"
+    return "unmatched"
 
 
 def record_prediction(urgencia: str) -> None:

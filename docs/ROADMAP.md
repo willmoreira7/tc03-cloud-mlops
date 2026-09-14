@@ -216,7 +216,7 @@ Workflow YAML no repositório + arquivo `.py` da DAG do Airflow.
 |---|--------|-------------|
 | 1 | Total de requisições | `Counter` por rota e status |
 | 2 | Latência de resposta | `Histogram` — p50 / p95 / p99 |
-| 3 | Taxa de erro | Proporção de respostas `5xx` |
+| 3 | Taxa de erro HTTP | Proporção de respostas `4xx`/`5xx` |
 | 4 | _(extra)_ Distribuição das classes preditas | `Counter` por classe |
 
 ### 📦 Entregável

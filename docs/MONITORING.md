@@ -19,7 +19,7 @@ O desenho segue o método **RED** da Aula 5:
 | Letra | Métrica | Implementação |
 |------|---------|---------------|
 | R — Rate | volume de requisições | `triagem_requests_total` |
-| E — Errors | proporção de falhas 5xx | `triagem_requests_total{status=~"5.."}` |
+| E — Errors | proporção de respostas 4xx/5xx no dashboard; 5xx nos alertas operacionais | `triagem_requests_total{status=~"4..|5.."}` |
 | D — Duration | distribuição de latência | `triagem_latency_seconds` |
 
 Também há uma métrica de modelo, útil para ML em produção:
@@ -77,7 +77,9 @@ Serviços esperados:
 | `triagem_model_info` | Info | `name`, `version` | expor metadados do modelo servido |
 
 Labels foram escolhidas para baixa cardinalidade. Não há texto de laudo, id de
-requisição, usuário ou qualquer campo livre como label.
+requisição, usuário ou qualquer campo livre como label. O label `endpoint` usa
+a rota casada pelo FastAPI; paths sem rota, como varreduras externas, entram em
+`endpoint="unmatched"` em vez de criar uma série por URL.
 
 ## Dashboard Grafana
 
@@ -87,7 +89,7 @@ O dashboard é provisionado automaticamente na pasta **Triagem** com o nome
 | Painel | Query principal | Atende |
 |--------|-----------------|--------|
 | Total de Requisições | `sum(increase(triagem_requests_total[$__range]))` | volume |
-| Taxa de Erro (5xx) | `sum(rate(triagem_requests_total{status=~"5.."}[5m])) / sum(rate(triagem_requests_total[5m])) or vector(0)` | erro |
+| Taxa de Erro HTTP (4xx/5xx) | `sum(rate(triagem_requests_total{status=~"4..|5.."}[5m])) / sum(rate(triagem_requests_total[5m])) or vector(0)` | erro |
 | Latência do `/predict` | `histogram_quantile(0.95, sum(rate(triagem_latency_seconds_bucket{endpoint="/predict"}[5m])) by (le))` | duração |
 | Distribuição das Classes Preditas | `sum(increase(triagem_predictions_total[$__range])) by (urgencia)` | métrica de modelo |
 
@@ -102,7 +104,8 @@ uv run python scripts/generate_load.py --url http://localhost:8000 --duration 60
 ```
 
 O script envia cerca de 90% de requisições válidas e 10% inválidas. As inválidas
-geram `422`, úteis para validar contagem por status sem simular falha 5xx.
+geram `422`, úteis para validar a taxa de erro HTTP do dashboard sem simular
+falha 5xx de servidor.
 
 ## Validação por Linha de Comando
 
@@ -124,7 +127,7 @@ Queries principais:
 ```promql
 sum(increase(triagem_requests_total[15m]))
 histogram_quantile(0.95, sum(rate(triagem_latency_seconds_bucket{endpoint="/predict"}[5m])) by (le))
-sum(rate(triagem_requests_total{status=~"5.."}[5m])) / sum(rate(triagem_requests_total[5m])) or vector(0)
+sum(rate(triagem_requests_total{status=~"4..|5.."}[5m])) / sum(rate(triagem_requests_total[5m])) or vector(0)
 sum(increase(triagem_predictions_total[15m])) by (urgencia)
 ```
 

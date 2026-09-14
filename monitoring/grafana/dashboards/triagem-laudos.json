@@ -63,7 +63,7 @@
     },
     {
       "datasource": "Prometheus",
-      "description": "Taxa de erro: proporcao de respostas 5xx sobre o total. Verde < 1%, amarelo 1-5%, vermelho > 5%.",
+      "description": "Taxa de erro HTTP: proporcao de respostas 4xx ou 5xx sobre o total. O gerador de carga envia entradas invalidas que aparecem como 422.",
       "fieldConfig": {
         "defaults": {
           "color": { "mode": "thresholds" },
@@ -97,12 +97,12 @@
       "pluginVersion": "11.0.0",
       "targets": [
         {
-          "expr": "sum(rate(triagem_requests_total{status=~\"5..\"}[5m])) / sum(rate(triagem_requests_total[5m])) or vector(0)",
+          "expr": "sum(rate(triagem_requests_total{status=~\"4..|5..\"}[5m])) / sum(rate(triagem_requests_total[5m])) or vector(0)",
           "legendFormat": "Taxa de erro",
           "refId": "A"
         }
       ],
-      "title": "Taxa de Erro (5xx)",
+      "title": "Taxa de Erro HTTP (4xx/5xx)",
       "type": "stat"
     },
     {

@@ -73,6 +73,19 @@ def test_requisicao_invalida_conta_como_422(client: TestClient) -> None:
     assert 'triagem_requests_total{endpoint="/predict",status="422"}' in corpo
 
 
+def test_rotas_nao_encontradas_usam_label_unmatched(client: TestClient) -> None:
+    """Paths arbitrarios de scanners nao devem criar series por URL bruta."""
+    for path in ("/nao-existe", "/predict/abc", "/wp-admin.php"):
+        resposta = client.get(path)
+        assert resposta.status_code == 404
+
+    corpo = client.get("/metrics").text
+    assert 'triagem_requests_total{endpoint="unmatched",status="404"}' in corpo
+    assert 'endpoint="/nao-existe"' not in corpo
+    assert 'endpoint="/predict/abc"' not in corpo
+    assert 'endpoint="/wp-admin.php"' not in corpo
+
+
 def _extrair_contador(corpo: str, endpoint: str, status: str) -> float:
     """Extrai o valor atual de um contador a partir do texto do /metrics.
 

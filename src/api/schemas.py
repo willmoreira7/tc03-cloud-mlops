@@ -1,8 +1,8 @@
 """Request and response contracts for the inference API.
 
-The validation here is what turns malformed input into a 422 instead of a 500
--- which matters beyond tidiness: a 500 pollutes the error-rate panel that the
-monitoring stage grades, while a 422 correctly reports a client mistake.
+The validation here turns malformed input into a 422 instead of a 500. That
+keeps server-error alerts focused on real service failures while still giving
+the dashboard an HTTP error signal by status code.
 """
 
 from __future__ import annotations
