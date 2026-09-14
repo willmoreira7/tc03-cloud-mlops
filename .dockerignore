@@ -20,6 +20,8 @@ scripts/
 # Apenas o artefato servido importa; logs de busca e metricas ficam de fora.
 models/*/search_log.csv
 models/evaluation/
+# Modelos em staging ainda nao passaram pelo quality gate.
+models/_staging/
 
 .env
 *.md

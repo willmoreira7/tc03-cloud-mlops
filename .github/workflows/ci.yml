@@ -1,0 +1,227 @@
+# CI: lint -> test -> build, e a DAG de retreino executada de ponta a ponta.
+#
+#   lint ──┬──► test ──► build
+#          └──► dag
+#
+# O dataset real nao e versionado. Os jobs treinam sobre o corpus sintetico de
+# scripts/gen_synthetic_data.py: o CI prova que o pipeline funciona, nao a
+# qualidade do modelo - essa esta registrada em docs/MODEL_CARD.md.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Um push novo na mesma branch cancela a execucao anterior, que ja esta velha.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Mesma versao da imagem Docker (python:3.12-slim) e da imagem do Airflow.
+  UV_PYTHON: "3.12"
+  SYNTHETIC_ROWS: "3000"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: true
+
+      # --locked falha se o uv.lock estiver dessincronizado do pyproject.toml.
+      - name: Instalar dependencias
+        run: uv sync --group dev --locked
+
+      - name: ruff check
+        run: uv run ruff check src/ scripts/ tests/ airflow/
+
+      - name: ruff format
+        run: uv run ruff format --check src/ scripts/ tests/ airflow/
+
+      - name: ruff nos notebooks
+        run: uv run nbqa ruff notebooks/
+
+  commitlint:
+    name: Commitlint
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Validar mensagens do PR
+        run: >
+          npx commitlint
+          --from ${{ github.event.pull_request.base.sha }}
+          --to ${{ github.event.pull_request.head.sha }}
+          --verbose
+
+  test:
+    name: Testes
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: true
+
+      - name: Instalar dependencias
+        run: uv sync --group dev --locked
+
+      - name: Gerar corpus sintetico
+        run: uv run python scripts/gen_synthetic_data.py --rows "$SYNTHETIC_ROWS"
+
+      # Mesmo comando documentado no README: ingest -> preprocess -> train ->
+      # quality gate -> publish. Se o modelo for reprovado, o job para aqui.
+      - name: Treinar modelo servido
+        run: uv run python scripts/train_serving_model.py
+
+      # TC03_REQUIRE_MODEL transforma o skip dos testes da API em falha: sem
+      # isso, um artefato ausente deixaria o job verde sem testar a API.
+      - name: pytest
+        env:
+          TC03_REQUIRE_MODEL: "1"
+        run: uv run pytest tests/ -v --cov=src --cov-report=term-missing
+
+      - name: Publicar artefato do modelo
+        uses: actions/upload-artifact@v7
+        with:
+          name: modelo-servido
+          path: |
+            models/
+            !models/_staging/
+          if-no-files-found: error
+          retention-days: 7
+
+  build:
+    name: Build da imagem
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      # A imagem embute o artefato: reaproveita o modelo que acabou de passar
+      # nos testes em vez de treinar de novo.
+      - uses: actions/download-artifact@v8
+        with:
+          name: modelo-servido
+          path: models/
+
+      - name: docker build
+        run: docker build --target runtime -t tc03-triagem-api:ci .
+
+      - name: Tamanho da imagem
+        run: docker image ls tc03-triagem-api:ci --format '{{.Repository}}:{{.Tag}} {{.Size}}'
+
+      - name: Subir container
+        run: docker run -d --name api -p 8000:8000 tc03-triagem-api:ci
+
+      # O container so fica healthy depois de carregar o modelo no startup.
+      - name: Aguardar healthcheck
+        run: |
+          for _ in $(seq 30); do
+            status=$(docker inspect -f '{{.State.Health.Status}}' api)
+            echo "health: $status"
+            [ "$status" = "healthy" ] && exit 0
+            [ "$(docker inspect -f '{{.State.Running}}' api)" = "false" ] && break
+            sleep 2
+          done
+          docker logs api
+          exit 1
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          curl -fsS http://localhost:8000/health | tee /dev/stderr \
+            | jq -e '.modelo_carregado == true'
+
+          curl -fsS -X POST http://localhost:8000/predict \
+            -H "Content-Type: application/json" \
+            -d '{"texto": "paciente com isquemia coronariana e infarto ventricular agudo"}' \
+            | tee /dev/stderr \
+            | jq -e '.urgencia | IN("normal", "atencao", "urgente")'
+
+          codigo=$(curl -s -o /dev/null -w '%{http_code}' -X POST \
+            http://localhost:8000/predict \
+            -H "Content-Type: application/json" -d '{"texto": "curto"}')
+          echo "texto invalido -> HTTP $codigo"
+          test "$codigo" = "422"
+
+      - name: Logs do container
+        if: always()
+        run: docker logs api || true
+
+  dag:
+    name: DAG de retreino
+    needs: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          enable-cache: true
+
+      - name: Gerar corpus sintetico
+        run: |
+          uv sync --locked --no-dev
+          uv run --no-dev python scripts/gen_synthetic_data.py --rows "$SYNTHETIC_ROWS"
+
+      # O container escreve em data/ e models/ montados do runner; rodar com o
+      # mesmo UID evita arquivos que o runner nao consegue ler depois.
+      - name: Build da imagem do Airflow
+        run: |
+          echo "AIRFLOW_UID=$(id -u)" > airflow/.env
+          docker compose -f airflow/docker-compose.yml build
+
+      # --local faz o parse dos arquivos da pasta de DAGs. Sem ele os dois
+      # comandos leem o banco, que num container novo esta vazio - e o check
+      # passaria sem ter olhado DAG nenhuma.
+      - name: DAG carrega sem erro de import
+        run: |
+          docker compose -f airflow/docker-compose.yml run --rm airflow bash -c '
+            set -e
+            airflow db migrate >/dev/null
+            airflow dags list-import-errors --local -o plain
+            airflow dags list --local -o plain | grep -q retreino_triagem
+          '
+
+      # `airflow dags test` executa todas as tasks em um processo, sem
+      # scheduler, e retorna erro se qualquer task falhar.
+      - name: Executar a DAG de ponta a ponta
+        run: |
+          docker compose -f airflow/docker-compose.yml run --rm airflow bash -c '
+            airflow db migrate >/dev/null &&
+            airflow dags test retreino_triagem
+          '
+
+      - name: Verificar modelo publicado pela DAG
+        run: |
+          test -f models/tfidf_logreg/model.pkl
+          jq -e '.run_id and .dataset_sha256' models/tfidf_logreg/metrics.json

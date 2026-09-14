@@ -4,9 +4,9 @@ Exists so that the container is buildable from a fresh clone. The notebooks
 are the record of the analysis, not a build step: nobody should have to run
 seven notebooks to get a working service.
 
-The stages are the same ones the notebooks call, in the same order, so this
-script and the analysis cannot drift apart. It is also the natural body of the
-Airflow retraining DAG.
+Runs the same stages as the Airflow retraining DAG, in the same order, by
+calling ``src/pipeline/stages.py``. The model is trained into a staging
+directory and only published to ``models/`` if it passes the quality gate.
 
 Usage:
     python scripts/train_serving_model.py
@@ -20,50 +20,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.config import DATA_PROCESSED, ensure_dirs, load_config, set_seed  # noqa: E402
-from src.data.loader import (  # noqa: E402
-    RawDataNotFoundError,
-    load_raw,
-    raw_files_present,
-)
-from src.data.preprocessing import (  # noqa: E402
-    class_distribution,
-    drop_degenerate,
-    make_splits,
-    map_urgency,
-)
-from src.models.experiment import run_candidate  # noqa: E402
-
-
-def preparar_dados() -> None:
-    """Builds the train/val/test splits from the raw corpus."""
-    presentes, ausentes = raw_files_present()
-    # Sem nenhum arquivo, quem explica o problema e a excecao de load_raw, que
-    # carrega o link do download. Avisar aqui so adicionaria ruido antes dela.
-    if presentes:
-        print(f"Arquivos brutos usados:  {', '.join(presentes)}")
-        if ausentes:
-            print(
-                f"AVISO: ausentes {', '.join(ausentes)} - as metricas vao diferir "
-                "de uma execucao com o corpus completo."
-            )
-
-    raw = load_raw()
-    print(f"Documentos brutos:      {len(raw):,}")
-
-    mapeado = map_urgency(raw)
-    limpo = drop_degenerate(mapeado)
-    print(f"Apos limpeza:           {len(limpo):,}")
-    print(class_distribution(limpo).to_string())
-
-    splits = make_splits(limpo)
-    for nome, frame in splits.items():
-        frame.to_parquet(DATA_PROCESSED / f"{nome}.parquet", index=False)
-        print(f"  {nome:6s} -> {len(frame):,}")
+from src.data.loader import RawDataNotFoundError  # noqa: E402
+from src.pipeline import stages  # noqa: E402
 
 
 def main() -> None:
-    """Runs preprocessing and trains the served model."""
+    """Runs ingest, preprocessing, training, quality gate and publishing."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--skip-preprocess",
@@ -72,33 +34,53 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    ensure_dirs()
-    seed = set_seed()
-    candidato = load_config()["serving"]["model"]
-    print(f"Modelo servido: {candidato} | seed={seed}\n")
+    run_id = stages.new_run_id()
+    print(f"Run: {run_id}\n")
 
-    if not args.skip_preprocess:
-        try:
-            preparar_dados()
-        except RawDataNotFoundError as erro:
-            print(erro)
-            print(
-                "\nPara apenas validar a stack, gere um substituto sintetico:\n"
-                "  uv run python scripts/gen_synthetic_data.py --rows 3000\n"
-                "As metricas resultantes nao reproduzem as documentadas."
-            )
-            raise SystemExit(1) from erro
+    try:
+        ingest = stages.ingest_data()
+    except RawDataNotFoundError as erro:
+        print(erro)
+        print(
+            "\nPara apenas validar a stack, gere um substituto sintetico:\n"
+            "  uv run python scripts/gen_synthetic_data.py --rows 3000\n"
+            "As metricas resultantes nao reproduzem as documentadas."
+        )
+        raise SystemExit(1) from erro
 
-    print(f"\nTreinando {candidato}...")
-    resultado = run_candidate(candidato)
+    print(f"[1/5] ingest       arquivos: {', '.join(ingest['arquivos'])}")
+    if ingest["ausentes"]:
+        print(
+            f"      AVISO: ausentes {', '.join(ingest['ausentes'])} - as metricas "
+            "vao diferir de uma execucao com o corpus completo."
+        )
 
-    metricas = resultado["test_metrics"]
-    print(f"\nParametros: {resultado['best_params']}")
-    print(f"f1_macro:       {metricas['f1_macro']:.4f}")
-    print(f"recall_urgente: {metricas['recall_urgente']:.4f}")
-    print(f"p95:            {resultado['latency']['latency_p95_ms']:.2f} ms")
-    print(f"\nArtefato: {resultado['output_dir'] / 'model.pkl'}")
-    print("A imagem Docker ja pode ser construida.")
+    if args.skip_preprocess:
+        print("[2/5] preprocess   pulado (--skip-preprocess)")
+    else:
+        prep = stages.preprocess_data()
+        print(
+            f"[2/5] preprocess   {prep['documentos_brutos']:,} brutos -> "
+            f"{prep['documentos_limpos']:,} limpos | splits {prep['splits']}"
+        )
+
+    treino = stages.train_model(run_id)
+    metricas = treino["test_metrics"]
+    print(f"[3/5] train        {treino['candidato']} | {treino['best_params']}")
+    print(f"      f1_macro:       {metricas['f1_macro']:.4f}")
+    print(f"      recall_urgente: {metricas['recall_urgente']:.4f}")
+    print(f"      p95:            {treino['latency']['latency_p95_ms']:.2f} ms")
+
+    try:
+        stages.evaluate_model(treino["diretorio"])
+    except stages.QualityGateError as erro:
+        print(f"[4/5] evaluate     REPROVADO\n\n{erro}")
+        raise SystemExit(1) from erro
+    print("[4/5] evaluate     aprovado no quality gate")
+
+    publicado = stages.publish_model(treino["diretorio"], ingest)
+    print(f"[5/5] publish      {publicado['diretorio']}")
+    print("\nA imagem Docker ja pode ser construida.")
 
 
 if __name__ == "__main__":

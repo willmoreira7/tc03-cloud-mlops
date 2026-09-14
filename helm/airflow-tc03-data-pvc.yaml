@@ -1,0 +1,19 @@
+# Disco do pipeline de retreino do tc03, montado no scheduler do Airflow em
+# /opt/airflow/tc03 (TC03_DATA_DIR=/opt/airflow/tc03/data,
+# TC03_MODELS_DIR=/opt/airflow/tc03/models).
+#
+# Com LocalExecutor todas as tasks rodam no pod do scheduler, entao um gp2
+# ReadWriteOnce basta. O corpus bruto vai em data/raw:
+#   POD=$(kubectl -n airflow get pod -l component=scheduler -o name | head -1)
+#   kubectl -n airflow cp medical_tc_train.csv ${POD#pod/}:/opt/airflow/tc03/data/raw/ -c scheduler
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: airflow-tc03-data
+  namespace: airflow
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: gp2
+  resources:
+    requests:
+      storage: 10Gi

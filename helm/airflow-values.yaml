@@ -1,0 +1,209 @@
+# Apache Airflow - chart oficial apache-airflow/airflow 1.22.0
+#
+#   helm repo add apache-airflow https://airflow.apache.org
+#   helm upgrade --install airflow apache-airflow/airflow --version 1.22.0 \
+#     -n airflow -f airflow-values.yaml \
+#     --set createUserJob.defaultUser.password="$(kubectl -n airflow get secret airflow-admin -o jsonpath='{.data.password}' | base64 -d)"
+#
+# Antes do install, crie o PVC de dados/modelos do pipeline (fora do chart,
+# que nao cria PVCs arbitrarios):
+#   kubectl apply -f airflow-tc03-data-pvc.yaml
+#
+# Segredos NAO ficam neste arquivo. Sao criados antes do install:
+#   airflow-fernet-key, airflow-api-secret-key, airflow-jwt-secret,
+#   airflow-metadata (conexao com o Postgres), airflow-postgresql (senha do Postgres),
+#   airflow-admin (senha do usuario admin da UI)
+#
+# Acesso: kubectl -n airflow port-forward svc/airflow-api-server 8080:8080
+#
+# Upgrade: com useHelmHooks=false os Jobs de migracao e de criacao de usuario
+# sao recursos comuns e imutaveis. Se o upgrade falhar com
+# 'cannot patch "airflow-create-user" with kind Job', apague os Jobs concluidos
+# (sao idempotentes) e rode o upgrade de novo:
+#   kubectl -n airflow delete job airflow-create-user airflow-run-airflow-migrations
+
+# Mesma versao do airflow/Dockerfile do tc03-cloud-mlops.
+airflowVersion: "3.3.1"
+defaultAirflowTag: "3.3.1"
+
+# Conexoes resolvidas por DNS; sem variaveis de ambiente de Service Links.
+enableServiceLinks: false
+
+# LocalExecutor: as tasks rodam como subprocessos do scheduler. Sem Redis, sem
+# workers e -- o motivo principal -- todas as tasks enxergam o mesmo disco
+# (PVC airflow-tc03-data), entao o que preprocess_data grava chega ao
+# train_model sem precisar de storage compartilhado (EFS/S3).
+executor: LocalExecutor
+
+# Segredos gerenciados fora do Helm para nao serem regenerados a cada upgrade
+# (o que reiniciaria todos os componentes).
+fernetKeySecretName: airflow-fernet-key
+apiSecretKeySecretName: airflow-api-secret-key
+jwtSecretName: airflow-jwt-secret
+
+data:
+  metadataSecretName: airflow-metadata
+
+postgresql:
+  enabled: true
+  auth:
+    existingSecret: airflow-postgresql
+  primary:
+    persistence:
+      enabled: true
+      size: 8Gi
+      storageClass: gp2
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { memory: 512Mi }
+
+# DAGs lidas direto do repositorio (publico). O subPath aponta para airflow/dags.
+dags:
+  persistence:
+    enabled: false
+  gitSync:
+    enabled: true
+    repo: https://github.com/willmoreira7/tc03-cloud-mlops.git
+    # git-sync v4 le GITSYNC_REF; branch fica para a variavel legada.
+    ref: main
+    branch: main
+    rev: HEAD
+    depth: 1
+    subPath: airflow/dags
+    period: 60s
+    recommendedProbeSetting: true
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { memory: 128Mi }
+
+createUserJob:
+  useHelmHooks: false
+  applyCustomEnv: false
+  defaultUser:
+    role: Admin
+    username: admin
+    email: admin@example.com
+    firstName: admin
+    lastName: user
+    # password: passado via --set no install (ver cabecalho)
+
+migrateDatabaseJob:
+  useHelmHooks: false
+  applyCustomEnv: false
+
+apiServer:
+  replicas: 1
+  # Atras do ALB: respeita X-Forwarded-Proto/Host para gerar URLs https.
+  args: ["bash", "-c", "exec airflow api-server --proxy-headers"]
+  env:
+    - name: FORWARDED_ALLOW_IPS
+      value: "*"
+  resources:
+    requests: { cpu: 200m, memory: 1Gi }
+    limits: { memory: 2Gi }
+  service:
+    type: ClusterIP
+
+scheduler:
+  replicas: 1
+  # O treino roda dentro deste pod (LocalExecutor).
+  resources:
+    requests: { cpu: 250m, memory: 1Gi }
+    limits: { memory: 3Gi }
+  # PVC RWO (gp2): o pod antigo precisa soltar o volume antes do novo subir.
+  strategy:
+    type: Recreate
+  env:
+    # Raiz do repositorio sincronizado pelo git-sync: torna `src` importavel.
+    - name: PYTHONPATH
+      value: /opt/airflow/dags/repo
+    # O repositorio e montado somente leitura; dados e modelos vao para o PVC.
+    - name: TC03_DATA_DIR
+      value: /opt/airflow/tc03/data
+    - name: TC03_MODELS_DIR
+      value: /opt/airflow/tc03/models
+  extraVolumes:
+    - name: tc03-data
+      persistentVolumeClaim:
+        claimName: airflow-tc03-data
+  extraVolumeMounts:
+    - name: tc03-data
+      mountPath: /opt/airflow/tc03
+  logGroomerSidecar:
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { memory: 128Mi }
+
+dagProcessor:
+  enabled: true
+  resources:
+    requests: { cpu: 100m, memory: 512Mi }
+    limits: { memory: 1Gi }
+  logGroomerSidecar:
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { memory: 128Mi }
+
+triggerer:
+  replicas: 1
+  persistence:
+    enabled: true
+    size: 5Gi
+    storageClassName: gp2
+  resources:
+    requests: { cpu: 50m, memory: 256Mi }
+    limits: { memory: 512Mi }
+  logGroomerSidecar:
+    resources:
+      requests: { cpu: 10m, memory: 32Mi }
+      limits: { memory: 128Mi }
+
+# Sem workers com LocalExecutor. Persistence desligada para o scheduler ser um
+# Deployment com o PVC airflow-tc03-data, e nao um StatefulSet com PVC de logs.
+workers:
+  celery:
+    persistence:
+      enabled: false
+
+# Metricas do Airflow expostas em formato Prometheus (porta 9102). O chart ja
+# anota o Service com prometheus.io/scrape, entao o Prometheus descobre sozinho.
+statsd:
+  enabled: true
+  resources:
+    requests: { cpu: 10m, memory: 32Mi }
+    limits: { memory: 128Mi }
+
+redis:
+  enabled: false
+
+pgbouncer:
+  enabled: false
+
+# DNS: Ingress ALB compartilhado (group.name mlops-tools, um unico ALB para
+# Airflow, Grafana e Prometheus) com HTTPS. Sem certificate-arn: o controller
+# descobre no ACM o certificado que cobre o host (*.pocsarcotech.com).
+# O registro no Route53 (zona publica pocsarcotech.com) e um alias A manual
+# apontando para o ALB -- o cluster nao tem external-dns.
+ingress:
+  apiServer:
+    enabled: true
+    ingressClassName: alb
+    hosts:
+      - name: airflow.pocsarcotech.com
+    path: /
+    pathType: Prefix
+    annotations:
+      alb.ingress.kubernetes.io/group.name: mlops-tools
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+      alb.ingress.kubernetes.io/ssl-redirect: "443"
+      alb.ingress.kubernetes.io/healthcheck-path: /api/v2/monitor/health
+
+config:
+  api:
+    base_url: https://airflow.pocsarcotech.com
+  core:
+    load_examples: "False"
+  logging:
+    remote_logging: "False"

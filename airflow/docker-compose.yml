@@ -1,0 +1,48 @@
+# Airflow local para a DAG de retreino.
+#
+# Separado do docker-compose.yml da raiz de proposito: treino e inferencia
+# nunca compartilham processo (docs/ARQUITETURA.md, Decisao 3), e o Airflow e
+# pesado demais para subir junto com a API toda vez.
+#
+#   echo "AIRFLOW_UID=$(id -u)" > airflow/.env
+#   docker compose -f airflow/docker-compose.yml up -d --build
+#   UI: http://localhost:8080
+
+name: tc03-airflow
+
+services:
+  airflow:
+    build:
+      context: ..
+      dockerfile: airflow/Dockerfile
+    image: tc03-airflow:latest
+    container_name: tc03-airflow
+    # standalone sobe api-server, scheduler, dag-processor e triggerer num so
+    # container, com SQLite. Suficiente para demonstrar a DAG; nao e topologia
+    # de producao.
+    command: standalone
+    # Mesmo UID do usuario do host: data/ e models/ sao montados, e arquivos
+    # criados pelo container precisam continuar acessiveis fora dele.
+    user: "${AIRFLOW_UID:-50000}:0"
+    ports:
+      - "8080:8080"
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      # Sem tela de login. APENAS para uso local: nao expor esta porta.
+      AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_ALL_ADMINS: "true"
+      PYTHONPATH: /opt/airflow/project
+    volumes:
+      - ./dags:/opt/airflow/dags:ro
+      - ../src:/opt/airflow/project/src:ro
+      - ../configs:/opt/airflow/project/configs:ro
+      # Sobrescreviveis para rodar a DAG sobre outro diretorio sem tocar no
+      # corpus real nem no modelo servido.
+      - ${TC03_DATA_DIR:-../data}:/opt/airflow/project/data
+      - ${TC03_MODELS_DIR:-../models}:/opt/airflow/project/models
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/api/v2/monitor/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    restart: unless-stopped
