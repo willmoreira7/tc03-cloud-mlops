@@ -122,6 +122,13 @@ scheduler:
       value: /opt/airflow/tc03/data
     - name: TC03_MODELS_DIR
       value: /opt/airflow/tc03/models
+    # A imagem padrao ja traz numpy, pandas, pyarrow e scikit-learn, mas nao as
+    # libs de exportacao ONNX que src/pipeline/stages.py importa. Sem elas toda
+    # task falha com "No module named 'onnxruntime'". Versoes do uv.lock.
+    # Instalado no startup do pod: aceitavel para laboratorio; em producao o
+    # caminho e a imagem de airflow/Dockerfile publicada no ECR.
+    - name: _PIP_ADDITIONAL_REQUIREMENTS
+      value: "onnx==1.22.0 onnxruntime==1.29.0 skl2onnx==1.20.0"
   extraVolumes:
     - name: tc03-data
       persistentVolumeClaim:
