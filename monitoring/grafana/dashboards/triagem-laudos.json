@@ -21,7 +21,7 @@
   "panels": [
     {
       "datasource": "Prometheus",
-      "description": "Requisicoes recebidas pelo servico no periodo selecionado, por rota. O scrape do Prometheus (/metrics) fica de fora: e trafego de observacao, nao uso da API.",
+      "description": "Inferencias recebidas pelo endpoint /predict na janela selecionada. Health checks e scrapes de /metrics ficam fora por serem trafego operacional.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -65,17 +65,17 @@
       "pluginVersion": "11.0.0",
       "targets": [
         {
-          "expr": "sum(increase(triagem_requests_total{endpoint!=\"/metrics\"}[$__range])) by (endpoint)",
-          "legendFormat": "{{endpoint}}",
+          "expr": "round(sum(increase(triagem_requests_total{endpoint=\"/predict\"}[$__range])))",
+          "legendFormat": "Inferencias",
           "refId": "A"
         }
       ],
-      "title": "Total de Requisicoes",
+      "title": "Inferencias no Periodo",
       "type": "stat"
     },
     {
       "datasource": "Prometheus",
-      "description": "Taxa de erro HTTP: proporcao de respostas 4xx ou 5xx sobre o total. O gerador de carga envia entradas invalidas que aparecem como 422.",
+      "description": "Taxa de erro HTTP do /predict: proporcao de respostas 4xx ou 5xx sobre o total de inferencias. O gerador de carga envia entradas invalidas que aparecem como 422.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -127,7 +127,7 @@
       "pluginVersion": "11.0.0",
       "targets": [
         {
-          "expr": "sum(rate(triagem_requests_total{status=~\"4..|5..\"}[5m])) / sum(rate(triagem_requests_total[5m])) or vector(0)",
+          "expr": "sum(rate(triagem_requests_total{endpoint=\"/predict\",status=~\"4..|5..\"}[5m])) / sum(rate(triagem_requests_total{endpoint=\"/predict\"}[5m])) or vector(0)",
           "legendFormat": "Taxa de erro",
           "refId": "A"
         }
@@ -137,7 +137,301 @@
     },
     {
       "datasource": "Prometheus",
-      "description": "Distribuicao das classes preditas pelo modelo. Mudanca abrupta do mix indica drift ou bug de feature.",
+      "description": "Percentual de inferencias do /predict que terminaram com status 2xx nos ultimos 5 minutos.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.95
+              },
+              {
+                "color": "green",
+                "value": 0.99
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "expr": "sum(rate(triagem_requests_total{endpoint=\"/predict\",status=~\"2..\"}[5m])) / sum(rate(triagem_requests_total{endpoint=\"/predict\"}[5m])) or vector(0)",
+          "legendFormat": "Sucesso",
+          "refId": "A"
+        }
+      ],
+      "title": "Taxa de Sucesso",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Percentual de inferencias do /predict atendidas dentro do SLO de 500ms nos ultimos 5 minutos.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.95
+              },
+              {
+                "color": "green",
+                "value": 0.99
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 6,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "expr": "sum(rate(triagem_latency_seconds_bucket{endpoint=\"/predict\",le=\"0.5\"}[5m])) / sum(rate(triagem_latency_seconds_count{endpoint=\"/predict\"}[5m])) or vector(0)",
+          "legendFormat": "Dentro do SLO",
+          "refId": "A"
+        }
+      ],
+      "title": "Dentro do SLO (500ms)",
+      "type": "stat"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Volume de inferencias por minuto no endpoint /predict. Ajuda a diferenciar aumento de carga de degradacao do modelo.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "inferencias/min",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 6
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "expr": "sum(rate(triagem_requests_total{endpoint=\"/predict\"}[1m])) * 60",
+          "legendFormat": "inferencias/min",
+          "refId": "A"
+        }
+      ],
+      "title": "Inferencias por Minuto",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Volume de respostas por status HTTP no /predict. Separa sucesso, erro de entrada e falha de servidor.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "respostas/min",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 6
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull",
+            "max"
+          ],
+          "displayMode": "table",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "expr": "sum(rate(triagem_requests_total{endpoint=\"/predict\"}[1m])) by (status) * 60",
+          "legendFormat": "HTTP {{status}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Status HTTP por Minuto",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "description": "Distribuicao acumulada das classes preditas pelo modelo no periodo selecionado. Mudanca abrupta do mix indica drift ou bug de feature.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -176,37 +470,52 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 6,
-        "w": 12,
-        "x": 12,
-        "y": 0
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 6
       },
       "id": 4,
       "options": {
-        "colWidth": 0.9,
+        "displayLabels": [
+          "name",
+          "percent"
+        ],
         "legend": {
           "calcs": [],
           "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
         },
-        "orientation": "auto",
-        "showValue": "auto",
-        "stacking": "normal",
-        "xField": {
-          "scale": "linear"
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
         }
       },
       "pluginVersion": "11.0.0",
       "targets": [
         {
           "expr": "sum(increase(triagem_predictions_total[$__range])) by (urgencia)",
+          "instant": true,
           "legendFormat": "{{urgencia}}",
+          "range": false,
           "refId": "A"
         }
       ],
       "title": "Distribuicao das Classes Preditas",
-      "type": "barchart"
+      "type": "piechart"
     },
     {
       "datasource": "Prometheus",
@@ -265,10 +574,10 @@
         "overrides": []
       },
       "gridPos": {
-        "h": 12,
+        "h": 10,
         "w": 24,
         "x": 0,
-        "y": 6
+        "y": 14
       },
       "id": 3,
       "options": {

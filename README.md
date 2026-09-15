@@ -507,10 +507,14 @@ na pasta *Triagem* do Grafana a partir de
 
 | Painel | Métrica base | PromQL |
 |--------|-------------|-------|
-| Total de requisições por rota | `triagem_requests_total` | `sum(increase(triagem_requests_total{endpoint!="/metrics"}[$__range])) by (endpoint)` |
+| Inferências no período | `triagem_requests_total{endpoint="/predict"}` | `round(sum(increase(triagem_requests_total{endpoint="/predict"}[$__range])))` |
+| Taxa de sucesso | `triagem_requests_total{endpoint="/predict",status=~"2.."}` | `sum(rate(...{endpoint="/predict",status=~"2.."}[5m])) / sum(rate(...{endpoint="/predict"}[5m]))` |
+| Dentro do SLO (500ms) | `triagem_latency_seconds_bucket{endpoint="/predict",le="0.5"}` | `sum(rate(..._bucket{endpoint="/predict",le="0.5"}[5m])) / sum(rate(..._count{endpoint="/predict"}[5m]))` |
+| Inferências por minuto | `triagem_requests_total{endpoint="/predict"}` | `sum(rate(...{endpoint="/predict"}[1m])) * 60` |
+| Status HTTP por minuto | `triagem_requests_total{endpoint="/predict"}` | `sum(rate(...{endpoint="/predict"}[1m])) by (status) * 60` |
 | Latência P50/P95/P99 do `/predict` | `triagem_latency_seconds` | `histogram_quantile(0.95, sum(rate(..._bucket{endpoint="/predict"}[5m])) by (le))` |
-| Taxa de erro HTTP (4xx/5xx) | `triagem_requests_total{status=~"4..|5.."}` | `sum(rate(...{status=~"4..|5.."}[5m])) / sum(rate(...[5m]))` |
-| Distribuição das classes | `triagem_predictions_total` | `sum(increase(...[$__range])) by (urgencia)` |
+| Taxa de erro HTTP (4xx/5xx) | `triagem_requests_total{endpoint="/predict",status=~"4..|5.."}` | `sum(rate(...{endpoint="/predict",status=~"4..|5.."}[5m])) / sum(rate(...{endpoint="/predict"}[5m]))` |
+| Distribuição das classes | `triagem_predictions_total` | pie chart com `sum(increase(...[$__range])) by (urgencia)` |
 
 Para popular os gráficos com carga sintética:
 
@@ -523,6 +527,11 @@ método **RED** (Rate, Errors, Duration) com `prometheus_client`. O scrape do Pr
 usa `/metrics/`, exposto via ASGI app do `prometheus_client`.
 
 O guia completo da Etapa 3 está em [`docs/MONITORING.md`](docs/MONITORING.md).
+
+O card de inferências usa a janela selecionada no Grafana. Portanto, em `Last
+24 hours`, ele mostra apenas chamadas ao `/predict` nas últimas 24h; para ver o
+contador acumulado desde o start da API, consulte
+`sum(triagem_requests_total{endpoint="/predict"})` no Prometheus.
 
 ---
 

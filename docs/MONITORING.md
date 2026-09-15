@@ -88,14 +88,27 @@ O dashboard é provisionado automaticamente na pasta **Triagem** com o nome
 
 | Painel | Query principal | Atende |
 |--------|-----------------|--------|
-| Total de Requisições | `sum(increase(triagem_requests_total{endpoint!="/metrics"}[$__range])) by (endpoint)` | volume por rota |
-| Taxa de Erro HTTP (4xx/5xx) | `sum(rate(triagem_requests_total{status=~"4..|5.."}[5m])) / sum(rate(triagem_requests_total[5m])) or vector(0)` | erro |
+| Inferências no Período | `round(sum(increase(triagem_requests_total{endpoint="/predict"}[$__range])))` | volume de uso real na janela selecionada |
+| Taxa de Erro HTTP (4xx/5xx) | `sum(rate(triagem_requests_total{endpoint="/predict",status=~"4..|5.."}[5m])) / sum(rate(triagem_requests_total{endpoint="/predict"}[5m])) or vector(0)` | erro de inferência |
+| Taxa de Sucesso | `sum(rate(triagem_requests_total{endpoint="/predict",status=~"2.."}[5m])) / sum(rate(triagem_requests_total{endpoint="/predict"}[5m])) or vector(0)` | disponibilidade |
+| Dentro do SLO (500ms) | `sum(rate(triagem_latency_seconds_bucket{endpoint="/predict",le="0.5"}[5m])) / sum(rate(triagem_latency_seconds_count{endpoint="/predict"}[5m])) or vector(0)` | SLO |
+| Inferências por Minuto | `sum(rate(triagem_requests_total{endpoint="/predict"}[1m])) * 60` | rate |
+| Status HTTP por Minuto | `sum(rate(triagem_requests_total{endpoint="/predict"}[1m])) by (status) * 60` | rate por status |
 | Latência do `/predict` | `histogram_quantile(0.95, sum(rate(triagem_latency_seconds_bucket{endpoint="/predict"}[5m])) by (le))` | duração |
-| Distribuição das Classes Preditas | `sum(increase(triagem_predictions_total[$__range])) by (urgencia)` | métrica de modelo |
+| Distribuição das Classes Preditas | `sum(increase(triagem_predictions_total[$__range])) by (urgencia)` | métrica de modelo em pie chart |
 
-A latência do dashboard filtra `endpoint="/predict"` porque o requisito do
-challenge é medir o tempo de resposta da inferência, não o tempo de scrape do
-Prometheus nem chamadas de `/health`.
+Os painéis principais filtram `endpoint="/predict"` porque o requisito do
+challenge é medir uso e tempo de resposta da inferência, não health checks nem
+scrapes de `/metrics`.
+
+O card **Inferências no Período** usa `increase` porque responde à pergunta
+"quantas chamadas ao `/predict` aconteceram na janela selecionada?". Ele não é
+um contador acumulado desde que a API subiu. Para depuração, o total acumulado
+do processo atual pode ser conferido com:
+
+```promql
+sum(triagem_requests_total{endpoint="/predict"})
+```
 
 ## Gerar Carga de Teste
 
@@ -125,9 +138,13 @@ curl http://localhost:9090/-/healthy
 Queries principais:
 
 ```promql
-sum(increase(triagem_requests_total{endpoint!="/metrics"}[15m])) by (endpoint)
+round(sum(increase(triagem_requests_total{endpoint="/predict"}[15m])))
+sum(rate(triagem_requests_total{endpoint="/predict"}[1m])) * 60
+sum(rate(triagem_requests_total{endpoint="/predict"}[1m])) by (status) * 60
 histogram_quantile(0.95, sum(rate(triagem_latency_seconds_bucket{endpoint="/predict"}[5m])) by (le))
-sum(rate(triagem_requests_total{status=~"4..|5.."}[5m])) / sum(rate(triagem_requests_total[5m])) or vector(0)
+sum(rate(triagem_requests_total{endpoint="/predict",status=~"4..|5.."}[5m])) / sum(rate(triagem_requests_total{endpoint="/predict"}[5m])) or vector(0)
+sum(rate(triagem_requests_total{endpoint="/predict",status=~"2.."}[5m])) / sum(rate(triagem_requests_total{endpoint="/predict"}[5m])) or vector(0)
+sum(rate(triagem_latency_seconds_bucket{endpoint="/predict",le="0.5"}[5m])) / sum(rate(triagem_latency_seconds_count{endpoint="/predict"}[5m])) or vector(0)
 sum(increase(triagem_predictions_total[15m])) by (urgencia)
 ```
 
