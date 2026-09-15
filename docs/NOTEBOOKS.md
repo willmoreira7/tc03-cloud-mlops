@@ -3,7 +3,7 @@
 > Estrutura, propósito e ordem de execução dos notebooks que selecionam o modelo de
 > classificação de urgência de laudos médicos.
 
-> ✅ **Notebooks `01` a `07` executados**, com saídas salvas nos arquivos. Resultado
+> ✅ **Notebooks `01` a `08` executados**, com saídas salvas nos arquivos. Resultado
 > consolidado em [MODEL_CARD.md](MODEL_CARD.md) e resumido em
 > [Resultado da seleção](#-resultado-da-seleção).
 

@@ -174,7 +174,7 @@ carrega um artefato pronto — isso mantém o serviço leve e o tempo de startup
 | 05 | Modelo leve (TF-IDF + classificador linear) | ✅ Aceita | Latência e tamanho de artefato sobre acurácia máxima |
 | 06 | Modelo de produção escolhido por comparação em notebooks | ✅ Aceita | Decisão auditável e reproduzível |
 | 07 | Regra de promoção centralizada em `src/evaluation/promotion.py` | ✅ Aceita | Notebook e DAG compartilham restrições; a API serve explicitamente o modelo configurado |
-| 08 | **Não** usar MLflow nesta fase | 🟡 Proposta | Não exigido pelo PDF; reavaliar após Etapas 1–3 |
+| 08 | **Não** usar MLflow nesta fase | ✅ Aceita | Não exigido pelo PDF. Reavaliada ao fim das Etapas 1–3: o rastreio de experimentos ficou coberto por `search_log.csv`, `metrics.json` com `run_id` e `dataset_sha256`, e o quality gate — MLflow não entrou |
 | 09 | **Não** usar DVC, Kubernetes ou Terraform na arquitetura alvo | ✅ Aceita | Fora do escopo do enunciado; o EKS da ADR 16 é só ambiente de demonstração |
 | 10 | API serve `tfidf_logreg`, não o promovido `tfidf_linear_svc` | ✅ Aceita | Empate técnico entre os dois; o LogReg expõe `predict_proba` e permite score de confiança |
 | 11 | Notebooks versionados **com** as saídas; sem `nbstripout` | ✅ Aceita | Quem clona vê o resultado da análise sem executar nada. Reavaliar se o corpus passar a ter dado clínico real |
