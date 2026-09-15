@@ -9,6 +9,11 @@ com 60 laudos por hora e 1 minuto por leitura, sem priorização um caso crític
 esperar quase uma hora apenas na fila. Por isso a latência do modelo é requisito de
 produto, não só métrica técnica.
 
+> 🎙️ **Dizer explicitamente, ainda na Situation:** o rótulo de urgência é derivado por
+> regra a partir das categorias do corpus público e **não foi validado clinicamente**. O
+> que está sendo demonstrado é o ciclo de vida de MLOps, não a validade clínica do
+> classificador. Omitir isso apresentaria o rótulo como se fosse clínico.
+
 ## T — Task (~45s)
 
 O Tech Challenge exige uma API de inferência, pipeline CI/CD, retreino automatizado,

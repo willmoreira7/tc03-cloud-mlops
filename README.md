@@ -17,6 +17,11 @@ capaz de classificar o nível de urgência de um texto clínico:
 | `atencao` | Achados que exigem revisão médica | Fila priorizada |
 | `urgente` | Achados críticos | Escalonamento imediato |
 
+> 🔴 **O rótulo de urgência é derivado por regra** a partir das categorias do corpus
+> público, **não é validado clinicamente**. O objetivo do desafio é o ciclo de vida de
+> MLOps, não a validade clínica do classificador. A regra, categoria a categoria, está em
+> [docs/DATASET.md](docs/DATASET.md#regra-aplicada).
+
 O valor clínico está na **redução do tempo entre a emissão do laudo e a leitura por um
 profissional**. Isso torna a latência de inferência um requisito de produto, não apenas
 uma métrica técnica.

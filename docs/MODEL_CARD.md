@@ -265,11 +265,10 @@ calibração adicional, o que mantém o contrato da API simples e útil para tri
 
 | Campo | Valor |
 |-------|-------|
-| Responsáveis | _a preencher_ |
-| Frequência de retreino | _a definir — DAG do Airflow_ |
+| Frequência de retreino | `@weekly` — DAG [`retreino_triagem`](../airflow/dags/retreino_triagem.py) |
 | Repositório | `git@github.com:willmoreira7/tc03-cloud-mlops.git` |
-| Reprodução | `notebooks/01` a `07`, na ordem |
+| Reprodução | `notebooks/01` a `08`, na ordem — ou `scripts/train_serving_model.py` em um comando |
 
 ---
 
-**Última atualização:** 2026-09-06
+**Última atualização:** 2026-09-15

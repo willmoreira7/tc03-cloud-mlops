@@ -9,7 +9,7 @@
 
 | Etapa | Disciplina | Peso relacionado | Status |
 |-------|-----------|------------------|--------|
-| [0 — Fundação](#-etapa-0--fundação-do-repositório) | — | — | 🟡 Em andamento |
+| [0 — Fundação](#-etapa-0--fundação-do-repositório) | — | — | ✅ Concluída |
 | [1 — Arquitetura e API](#-etapa-1--decisão-arquitetural-e-api-inicial) | Deploy em Nuvem | 15% (doc) | ✅ Concluída |
 | [2 — CI/CD e Pipeline](#-etapa-2--cicd-e-pipeline-automatizado) | CI/CD e Pipeline de Treino | 30% | ✅ Concluída |
 | [3 — Monitoramento](#-etapa-3--monitoramento-e-observabilidade) | Monitoração de Performance | 20% | ✅ Concluída |
@@ -89,9 +89,10 @@ Conferência item a item do que o enunciado exige.
 - [x] Fixar o limiar de recall `urgente` e o teto de latência p95 ([NOTEBOOKS.md](NOTEBOOKS.md))
 - [x] Criar a estrutura de diretórios descrita no README
 - [x] Adicionar `data/`, `models/` e saídas de notebook ao [.gitignore](../.gitignore)
-- [ ] Confirmar as decisões marcadas como 🟡 **Proposta** em [ARQUITETURA.md](ARQUITETURA.md)
-- [ ] Revisar a regra de mapeamento de urgência ([DATASET.md](DATASET.md))
-- [ ] Preencher a tabela de equipe no README
+- [x] Confirmar as decisões marcadas como 🟡 **Proposta** em [ARQUITETURA.md](ARQUITETURA.md)
+- [x] Revisar a regra de mapeamento de urgência ([DATASET.md](DATASET.md)) — a ressalva
+      metodológica passou a ser declarada também no README e no roteiro do vídeo, como o
+      próprio DATASET.md exige
 
 ### 🧰 Arquivos de tooling a criar
 
@@ -194,7 +195,7 @@ mas afeta tempo de build e de deploy.
 
 ### ✅ Critério de aceite
 
-- [ ] Badge do workflow verde na branch principal _(confirmar após o merge)_
+- [x] Badge do workflow verde na branch principal
 - [x] Mínimo de **2 automações** rodando (exigência do enunciado)
 - [x] DAG carrega no Airflow sem erro de import e executa fim a fim
 
