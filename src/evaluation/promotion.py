@@ -12,7 +12,9 @@ criterion.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -26,6 +28,36 @@ class NoEligibleModelError(ValueError):
     """Raised when no candidate satisfies the promotion constraints."""
 
 
+def constraint_violations(metrics: Mapping[str, Any]) -> list[str]:
+    """Lists which promotion constraints one model fails.
+
+    The comparison notebook only needs to know *whether* a model is eligible;
+    the retraining quality gate also has to say *why* it rejected one, so the
+    rule is expressed per model and the table filter is built on top of it.
+
+    Args:
+        metrics: Mapping carrying at least ``recall_urgente`` and
+            ``latency_p95_ms``.
+
+    Returns:
+        One human-readable message per violated constraint; empty if eligible.
+    """
+    rules = load_config()["promotion"]
+    min_recall = float(rules["min_recall_urgente"])
+    max_p95 = float(rules["max_latency_p95_ms"])
+
+    violations = []
+    if float(metrics["recall_urgente"]) < min_recall:
+        violations.append(
+            f"recall_urgente {float(metrics['recall_urgente']):.4f} < {min_recall}"
+        )
+    if float(metrics["latency_p95_ms"]) > max_p95:
+        violations.append(
+            f"latency_p95_ms {float(metrics['latency_p95_ms']):.2f} > {max_p95}"
+        )
+    return violations
+
+
 def eligible_models(comparison: pd.DataFrame) -> pd.DataFrame:
     """Filters candidates that satisfy both promotion constraints.
 
@@ -36,11 +68,10 @@ def eligible_models(comparison: pd.DataFrame) -> pd.DataFrame:
     Returns:
         The subset of rows that are eligible for promotion.
     """
-    rules = load_config()["promotion"]
-    return comparison[
-        (comparison["recall_urgente"] >= float(rules["min_recall_urgente"]))
-        & (comparison["latency_p95_ms"] <= float(rules["max_latency_p95_ms"]))
-    ]
+    if comparison.empty:
+        return comparison
+    eligible = comparison.apply(lambda row: not constraint_violations(row), axis=1)
+    return comparison[eligible.astype(bool)]
 
 
 def select_promoted_model(comparison: pd.DataFrame) -> str:
