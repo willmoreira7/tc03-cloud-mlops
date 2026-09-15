@@ -233,7 +233,8 @@ def export_onnx_model(model_dir: str | Path) -> dict[str, Any]:
         Directory, artefact path and measured ONNX latency.
 
     Raises:
-        QualityGateError: If ONNX predictions diverge from the sklearn model.
+        QualityGateError: If ONNX predictions diverge from the sklearn model,
+            or if the exported model would not itself pass promotion.
         FileNotFoundError: If expected artefacts are missing.
     """
     model_dir = Path(model_dir)
@@ -253,6 +254,18 @@ def export_onnx_model(model_dir: str | Path) -> dict[str, Any]:
             f"({comparison['mismatch_rate']:.2%}; limite {max_mismatch_rate:.2%})."
         )
 
+    # O gate da etapa anterior julgou o .pkl, mas quem atende requisicao e o ONNX.
+    # Uma divergencia dentro do limite ainda pode derrubar o recall da classe
+    # urgente, entao as restricoes de promocao sao reaplicadas ao artefato servido.
+    onnx_checked = {**comparison["onnx_quality"], **comparison["onnx_latency"]}
+    onnx_violations = constraint_violations(onnx_checked)
+    if onnx_violations:
+        raise QualityGateError(
+            "Modelo ONNX reprovado nas restricoes de promocao: "
+            + "; ".join(onnx_violations)
+            + f". O artefato continua em {model_dir} e NAO foi publicado."
+        )
+
     metrics_path = model_dir / METRICS_FILENAME
     payload = json.loads(metrics_path.read_text(encoding="utf-8"))
     payload["onnx"] = {
@@ -262,6 +275,7 @@ def export_onnx_model(model_dir: str | Path) -> dict[str, Any]:
         "mismatches": comparison["mismatches"],
         "mismatch_rate": comparison["mismatch_rate"],
         "max_mismatch_rate": max_mismatch_rate,
+        "promotion_constraints_ok": True,
         "latency": comparison["onnx_latency"],
         "quality_metrics": comparison["onnx_quality"],
         "comparison_file": LATENCY_COMPARISON_FILENAME,

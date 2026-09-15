@@ -12,14 +12,10 @@ from __future__ import annotations
 
 import argparse
 import random
-import sys
 import threading
 import time
-from pathlib import Path
 
 import httpx
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 LAUDOS_VALIDOS = [
     "Patient presented with acute myocardial infarction and severe coronary "

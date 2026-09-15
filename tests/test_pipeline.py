@@ -157,3 +157,30 @@ def test_pipeline_ponta_a_ponta_com_dados_sinteticos(tmp_path: Path) -> None:
     modelo = joblib.load(publicado / "model.pkl")
     predicao = modelo.predict(["paciente com isquemia e infarto ventricular agudo"])
     assert predicao[0] in load_config()["classes"]
+
+
+def test_export_onnx_reprova_modelo_que_viola_promocao(monkeypatch) -> None:
+    """O ONNX servido tambem precisa passar nas restricoes de promocao.
+
+    O gate anterior julga o `.pkl`. Um ONNX equivalente dentro do limite de
+    divergencia ainda pode derrubar o recall de `urgente` abaixo do minimo --
+    e nesse caso nao pode ser publicado.
+    """
+    monkeypatch.setattr(
+        stages, "export_model", lambda _dir: {"onnx_model_size_mb": 0.1}
+    )
+    monkeypatch.setattr(
+        stages,
+        "compare_artifacts",
+        lambda _dir: {
+            "mismatch_rate": 0.0,
+            "mismatches": 0,
+            "checked_predictions": 100,
+            "equivalent_predictions": True,
+            "onnx_quality": {"recall_urgente": 0.10},
+            "onnx_latency": {"latency_p95_ms": 1.0},
+        },
+    )
+
+    with pytest.raises(stages.QualityGateError, match="restricoes de promocao"):
+        stages.export_onnx_model("qualquer/diretorio")
