@@ -1,0 +1,107 @@
+# API de triagem no EKS do laboratorio, ao lado de Airflow, Prometheus e Grafana.
+#
+#   kubectl apply -f triagem-api.yaml
+#
+# Imagem publicada no Docker Hub com o modelo embutido (tfidf_logreg treinado
+# pela DAG retreino_triagem sobre o corpus real). Build e push a partir da raiz:
+#   kubectl -n airflow cp <scheduler-pod>:/opt/airflow/tc03/models/tfidf_logreg models/tfidf_logreg -c scheduler
+#   docker build --target runtime -t mmacanmunhoz/tc03-triagem-api:<sha> .
+#   docker push mmacanmunhoz/tc03-triagem-api:<sha>
+#
+# O retreino no cluster NAO atualiza esta API: o modelo novo fica no PVC do
+# scheduler. Atualizar o modelo servido = rebuild da imagem + nova tag aqui.
+#
+# DNS: Ingress no ALB compartilhado (group.name mlops-tools). O registro
+# triagem.pocsarcotech.com no Route53 e um alias A manual para esse ALB.
+# (api.pocsarcotech.com ja pertence a outro projeto.)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: triagem
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: triagem-api
+  namespace: triagem
+  labels:
+    app: triagem-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: triagem-api
+  template:
+    metadata:
+      labels:
+        app: triagem-api
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: api
+          image: mmacanmunhoz/tc03-triagem-api:364c8b9
+          ports:
+            - name: http
+              containerPort: 8000
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 512Mi }
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 20
+            periodSeconds: 20
+---
+# As anotacoes prometheus.io/* fazem o job kubernetes-service-endpoints do
+# Prometheus descobrir a API sozinho. O path tem barra final: /metrics
+# redireciona para /metrics/ (ver src/api/metrics.py).
+apiVersion: v1
+kind: Service
+metadata:
+  name: triagem-api
+  namespace: triagem
+  labels:
+    app: triagem-api
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+    prometheus.io/path: /metrics/
+spec:
+  type: ClusterIP
+  selector:
+    app: triagem-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: triagem-api
+  namespace: triagem
+  annotations:
+    alb.ingress.kubernetes.io/group.name: mlops-tools
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/healthcheck-path: /health
+spec:
+  ingressClassName: alb
+  rules:
+    - host: triagem.pocsarcotech.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: triagem-api
+                port:
+                  name: http

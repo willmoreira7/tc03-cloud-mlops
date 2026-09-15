@@ -130,6 +130,12 @@ Cliente (HIS) ──HTTPS──► ALB ──► EC2 [FastAPI + modelo]  ◄─�
 Job agendado: ingest → train → evaluate → export  ──►  artefato em S3
 ```
 
+> ☸️ **Ambiente de demonstração.** Para a entrega, a API roda no cluster EKS que o
+> laboratório já mantém, ao lado de Airflow, Prometheus e Grafana (ver
+> [Ambiente Publicado](#-ambiente-publicado)). Isso reaproveita infraestrutura existente e
+> não altera a recomendação acima: para um hospital, EC2 atrás de ALB continua sendo o
+> alvo de produção.
+
 > 📄 Comparativos completos, ADRs e o baseline de latência medido estão em
 > **[docs/ARQUITETURA.md](docs/ARQUITETURA.md)**.
 
@@ -238,15 +244,24 @@ tc03-cloud-mlops/
 
 ## 🌐 Ambiente Publicado
 
-Serviços em execução no cluster Kubernetes (instalados via Helm):
+Serviços em execução no cluster EKS do laboratório. Airflow, Prometheus e Grafana são
+instalados via Helm; a API é aplicada com `kubectl apply -f helm/triagem-api.yaml`, usando a
+imagem [`mmacanmunhoz/tc03-triagem-api`](https://hub.docker.com/r/mmacanmunhoz/tc03-triagem-api)
+do Docker Hub com o modelo embutido.
 
 | Serviço    | URL                                   | Login   | Senha                              |
 |------------|---------------------------------------|---------|------------------------------------|
+| API        | https://triagem.pocsarcotech.com/docs | —       | —                                  |
 | Airflow    | https://airflow.pocsarcotech.com/     | `admin` | `OG5x8547V_8R4qmE8_tgHvRdgjl5bPuE` |
 | Grafana    | https://grafana.pocsarcotech.com      | `admin` | `STbREguNJJg1lfor6j-Gk2jGeVNNip44` |
 | Prometheus | https://prometheus.pocsarcotech.com   | —       | —                                  |
 
 > ⚠️ Credenciais publicadas intencionalmente: ambiente de laboratório acadêmico (pós-graduação).
+
+O Prometheus do cluster descobre a API pelas anotações do Service, e o dashboard
+"Triagem de Laudos - Observabilidade" mostra as métricas dela no Grafana. O dashboard
+"Retreino de Laudos - Airflow" acompanha as execuções da DAG. O retreino no cluster **não**
+atualiza a API: trocar o modelo servido exige rebuild da imagem e nova tag no manifesto.
 
 ---
 
