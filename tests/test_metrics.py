@@ -8,6 +8,8 @@ and growth of the series, which is what the dashboard depends on.
 
 from __future__ import annotations
 
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -24,7 +26,15 @@ LAUDO_VALIDO = (
 def client() -> TestClient:
     """Client that runs the app lifespan, so the model is loaded."""
     if not get_classifier().path.exists():
-        pytest.skip("Artefato do modelo ausente - rode os notebooks 01 a 07")
+        motivo = (
+            "Artefato do modelo ausente - rode "
+            "`uv run python scripts/train_serving_model.py`"
+        )
+        # No CI o modelo e treinado antes dos testes. Pular em silencio ali
+        # deixaria o workflow verde sem ter testado a instrumentacao.
+        if os.environ.get("TC03_REQUIRE_MODEL"):
+            pytest.fail(motivo)
+        pytest.skip(motivo)
     with TestClient(app) as test_client:
         yield test_client
 

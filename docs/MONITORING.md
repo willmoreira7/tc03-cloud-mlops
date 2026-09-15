@@ -88,7 +88,7 @@ O dashboard é provisionado automaticamente na pasta **Triagem** com o nome
 
 | Painel | Query principal | Atende |
 |--------|-----------------|--------|
-| Total de Requisições | `sum(increase(triagem_requests_total[$__range]))` | volume |
+| Total de Requisições | `sum(increase(triagem_requests_total{endpoint!="/metrics"}[$__range])) by (endpoint)` | volume por rota |
 | Taxa de Erro HTTP (4xx/5xx) | `sum(rate(triagem_requests_total{status=~"4..|5.."}[5m])) / sum(rate(triagem_requests_total[5m])) or vector(0)` | erro |
 | Latência do `/predict` | `histogram_quantile(0.95, sum(rate(triagem_latency_seconds_bucket{endpoint="/predict"}[5m])) by (le))` | duração |
 | Distribuição das Classes Preditas | `sum(increase(triagem_predictions_total[$__range])) by (urgencia)` | métrica de modelo |
@@ -125,7 +125,7 @@ curl http://localhost:9090/-/healthy
 Queries principais:
 
 ```promql
-sum(increase(triagem_requests_total[15m]))
+sum(increase(triagem_requests_total{endpoint!="/metrics"}[15m])) by (endpoint)
 histogram_quantile(0.95, sum(rate(triagem_latency_seconds_bucket{endpoint="/predict"}[5m])) by (le))
 sum(rate(triagem_requests_total{status=~"4..|5.."}[5m])) / sum(rate(triagem_requests_total[5m])) or vector(0)
 sum(increase(triagem_predictions_total[15m])) by (urgencia)
@@ -141,8 +141,8 @@ Testes automatizados:
 
 ```bash
 uv run pytest tests/test_metrics.py -v
-uv run ruff check src/ scripts/ tests/
-uv run ruff format --check src/ scripts/ tests/
+uv run ruff check src/ scripts/ tests/ airflow/
+uv run ruff format --check src/ scripts/ tests/ airflow/
 ```
 
 ## Troubleshooting

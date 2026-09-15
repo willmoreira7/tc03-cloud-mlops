@@ -116,30 +116,45 @@ minoritária — efeito do `class_weight="balanced"`.
 > ✅ **Etapa 4 concluída.** O modelo é exportado para ONNX antes da publicação e a API
 > carrega `model.onnx` quando `serving.runtime: onnx`.
 
+Medido sobre o **corpus real** (1.685 documentos de teste), via
+[`08_onnx_optimization.ipynb`](../notebooks/08_onnx_optimization.ipynb).
+
 | Runtime | Formato | p50 (ms) | p95 (ms) | p99 (ms) | Chamadas | Tamanho |
 |---------|---------|----------|----------|----------|----------|---------|
-| Baseline | `.pkl` (scikit-learn) | 0,86 | 1,21 | 1,32 | 1000 | 0,125 MB |
-| Otimizado | `.onnx` (ONNX Runtime) | 0,07 | 0,09 | 0,11 | 1000 | 0,089 MB |
-| **Ganho** | | **12,8x** | **12,9x** | **11,6x** | | **28,8% menor** |
+| Baseline | `.pkl` (scikit-learn) | 1,46 | 2,73 | 3,50 | 1000 | 1,226 MB |
+| Otimizado | `.onnx` (ONNX Runtime) | 0,58 | 1,09 | 2,18 | 1000 | 0,840 MB |
+| **Ganho** | | **2,5x** | **2,5x** | **1,6x** | | **31,5% menor** |
 
 **Protocolo de medição:** ver [NOTEBOOKS.md](NOTEBOOKS.md) — 50 chamadas de aquecimento
 descartadas, até 1.000 predições single-sample sob orçamento de 45 s, mesma máquina.
 
-> ℹ️ A medição acima foi gerada localmente sobre corpus sintético, porque o dataset real
-> não é versionado no repositório. Ela valida o mecanismo de otimização e comparação; as
-> métricas de qualidade reais continuam sendo as dos notebooks `01` a `07`.
+> ⚠️ O ganho depende do tamanho do modelo. Sobre o corpus sintético do CI — vocabulário
+> pequeno, artefato de 0,125 MB — a mesma comparação chega a ~12x. O número honesto para
+> a entrega é o do corpus real: **2,5x**. Executar o notebook `08` sobre dados sintéticos
+> produz um ganho inflado que não se reproduz em produção.
 
 ### Compatibilidade ONNX
 
 | Verificação | Resultado |
 |-------------|-----------|
-| Predições comparadas | 450 |
-| Divergências | 1 |
-| Taxa de divergência | 0,22% |
-| Limite aceito | 1,00% |
+| Predições comparadas | 1.685 |
+| Divergências | 19 |
+| Taxa de divergência | 1,13% |
+| Limite aceito | 2,00% |
 
-A única divergência observada ocorreu em exemplo de fronteira entre `normal` e `atencao`.
-O gate reprova o ONNX se a taxa passar de `optimization.onnx.max_mismatch_rate`.
+As divergências ocorrem em exemplos de fronteira, por diferença de precisão numérica
+entre scikit-learn e ONNX Runtime. O impacto agregado em qualidade é pequeno:
+
+| Métrica | sklearn | ONNX | Δ |
+|---------|---------|------|---|
+| F1-macro | 0,7489 | 0,7466 | −0,0022 |
+| Recall `urgente` | 0,7957 | 0,7930 | −0,0027 |
+| Acurácia | 0,7460 | 0,7436 | −0,0024 |
+
+O pipeline reprova o ONNX em dois pontos: se a taxa de divergência passar de
+`optimization.onnx.max_mismatch_rate`, **ou** se o próprio ONNX violar as restrições de
+promoção (recall de `urgente` ≥ 0,60 e p95 ≤ 15 ms). O segundo é a garantia que importa
+clinicamente — o primeiro apenas detecta uma exportação quebrada.
 
 ---
 

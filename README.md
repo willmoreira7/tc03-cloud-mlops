@@ -53,10 +53,11 @@ ciclo de vida do modelo funcione de ponta a ponta:
                        │   Prometheus     │ ───► │   Grafana    │
                        └──────────────────┘      └──────────────┘
 
-   ┌──────────────────────────────────────────────────────────┐
-   │  Airflow DAG (retreino)                                  │
-   │  ingest → preprocess → train → evaluate (gate) → publish │
-   └──────────────────────────────────────────────────────────┘
+   ┌──────────────────────────────────────────────────────────────────┐
+   │  Airflow DAG (retreino)                                          │
+   │  ingest → preprocess → train → evaluate (gate) → export_onnx →   │
+   │  publish                                                         │
+   └──────────────────────────────────────────────────────────────────┘
                                   │
                                   ▼
                           artefato de modelo
@@ -219,7 +220,7 @@ tc03-cloud-mlops/
 ├── data/                    # Dados (raw/processed) — não versionados
 ├── docs/                    # ✅ Documentação do projeto
 ├── models/                  # Artefatos de modelo — não versionados
-├── notebooks/               # ✅ EDA, candidatos e comparação (01 a 07)
+├── notebooks/               # ✅ EDA, candidatos, comparação e ONNX (01 a 08)
 ├── scripts/
 │   ├── gen_synthetic_data.py   # ✅ Corpus sintético para pipeline e CI
 │   └── train_serving_model.py  # ✅ Pipeline de treino em um comando
@@ -228,6 +229,7 @@ tc03-cloud-mlops/
 │   ├── data/                # ✅ Loader, limpeza, mapeamento e splits
 │   ├── evaluation/          # ✅ Métricas, latência e regra de promoção
 │   ├── models/              # ✅ Pipelines dos candidatos e rotina de experimento
+│   ├── optimization/        # ✅ Exportação ONNX e comparação de latência (Etapa 4)
 │   ├── pipeline/            # ✅ Etapas do retreino (script, DAG e CI)
 │   └── api/                 # ✅ Serviço FastAPI de inferência + instrumentação
 ├── tests/                   # ✅ Testes automatizados (pytest)
@@ -235,7 +237,8 @@ tc03-cloud-mlops/
 ├── Dockerfile               # ✅ Imagem do serviço de inferência
 ├── docker-compose.yml       # ✅ Stack local: API + Prometheus + Grafana
 ├── .github/workflows/       # ✅ CI: lint → testes → build + DAG
-└── airflow/                 # ✅ DAG de retreino + Airflow local em Docker
+├── airflow/                 # ✅ DAG de retreino + Airflow local em Docker
+└── helm/                    # ✅ Values Helm do ambiente publicado em EKS (ver abaixo)
 ```
 
 **Legenda:** ✅ existe · ⬜ a construir na etapa indicada
@@ -257,6 +260,11 @@ do Docker Hub com o modelo embutido.
 | Prometheus | https://prometheus.pocsarcotech.com   | —       | —                                  |
 
 > ⚠️ Credenciais publicadas intencionalmente: ambiente de laboratório acadêmico (pós-graduação).
+>
+> Este cluster é o ambiente de **demonstração** e não substitui a execução local: o
+> entregável reproduzível do enunciado é a stack em Docker Compose descrita em
+> [Como Executar](#-como-executar). A ADR 16 em
+> [ARQUITETURA.md](docs/ARQUITETURA.md#-registro-de-decisões-adr-resumido) compara os dois.
 
 O Prometheus do cluster descobre a API pelas anotações do Service, e o dashboard
 "Triagem de Laudos - Observabilidade" mostra as métricas dela no Grafana. O dashboard
@@ -386,8 +394,8 @@ uv run python scripts/measure_api_latency.py --url http://localhost:8000
 
 ```bash
 uv run pytest tests/ -v
-uv run ruff check src/ scripts/ tests/
-uv run ruff format --check src/ scripts/ tests/
+uv run ruff check src/ scripts/ tests/ airflow/
+uv run ruff format --check src/ scripts/ tests/ airflow/
 uv run nbqa ruff notebooks/          # lint dentro dos notebooks
 ```
 
@@ -494,7 +502,7 @@ na pasta *Triagem* do Grafana a partir de
 
 | Painel | Métrica base | PromQL |
 |--------|-------------|-------|
-| Total de requisições | `triagem_requests_total` | `sum(increase(triagem_requests_total[$__range]))` |
+| Total de requisições por rota | `triagem_requests_total` | `sum(increase(triagem_requests_total{endpoint!="/metrics"}[$__range])) by (endpoint)` |
 | Latência P50/P95/P99 do `/predict` | `triagem_latency_seconds` | `histogram_quantile(0.95, sum(rate(..._bucket{endpoint="/predict"}[5m])) by (le))` |
 | Taxa de erro HTTP (4xx/5xx) | `triagem_requests_total{status=~"4..|5.."}` | `sum(rate(...{status=~"4..|5.."}[5m])) / sum(rate(...[5m]))` |
 | Distribuição das classes | `triagem_predictions_total` | `sum(increase(...[$__range])) by (urgencia)` |
@@ -520,11 +528,14 @@ continua sendo o baseline de comparação e artefato de auditoria.
 
 | Runtime | Formato | p50 (ms) | p95 (ms) | p99 (ms) | Tamanho |
 |---------|---------|----------|----------|----------|---------|
-| Baseline | `.pkl` | 0,86 | 1,21 | 1,32 | 0,125 MB |
-| Otimizado | `.onnx` | 0,07 | 0,09 | 0,11 | 0,089 MB |
+| Baseline | `.pkl` | 1,46 | 2,73 | 3,50 | 1,226 MB |
+| Otimizado | `.onnx` | 0,58 | 1,09 | 2,18 | 0,840 MB |
+| **Ganho** | | **2,5x** | **2,5x** | **1,6x** | **31,5% menor** |
 
-Medição local sobre corpus sintético, com 50 warm-ups e 1.000 chamadas single-sample por
-runtime. Evidência versionada em [`docs/assets/latency_comparison.csv`](docs/assets/latency_comparison.csv).
+Medição sobre o **corpus real** (1.685 documentos de teste), 50 warm-ups e 1.000 chamadas
+single-sample por runtime, mesma máquina. Evidência versionada em
+[`docs/assets/latency_comparison.csv`](docs/assets/latency_comparison.csv) e detalhamento
+no [Model Card](docs/MODEL_CARD.md#-otimização-e-latência).
 
 ---
 
@@ -567,16 +578,6 @@ runtime. Evidência versionada em [`docs/assets/latency_comparison.csv`](docs/as
 | [docs/DATASET.md](docs/DATASET.md) | Escolha do dataset, esquema e estratégia de rotulagem |
 | [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) | Fluxo de branches, PRs e ambiente local |
 | [docs/COMMITLINT.md](docs/COMMITLINT.md) | Padrão de mensagens de commit |
-
----
-
-## 👥 Equipe
-
-| Nome | RM | Responsabilidade |
-|------|----|------------------|
-| _a preencher_ | _a preencher_ | _a preencher_ |
-
-**Vídeo STAR:** roteiro em [`docs/VIDEO_STAR.md`](docs/VIDEO_STAR.md); link final a preencher após gravação.
 
 ---
 
