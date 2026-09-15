@@ -1,6 +1,7 @@
 """The retraining pipeline, one function per stage.
 
-    ingest_data -> preprocess_data -> train_model -> evaluate_model -> publish_model
+    ingest_data -> preprocess_data -> train_model -> evaluate_model ->
+    export_onnx_model -> publish_model
 
 ``scripts/train_serving_model.py`` and the Airflow DAG both call these
 functions in this order. Neither carries pipeline logic of its own: if they
@@ -11,9 +12,9 @@ Every stage returns a small JSON-serialisable dict. That is what Airflow
 passes between tasks through XCom, so no stage may return a model or a
 dataframe -- large objects travel through the filesystem instead.
 
-Training writes to ``models/_staging/<run_id>/``, never to the path the API
-loads from. Only ``publish_model`` moves an artefact there, and it only runs
-after ``evaluate_model`` has accepted it.
+Training and ONNX export write to ``models/_staging/<run_id>/``, never to the
+path the API loads from. Only ``publish_model`` moves an artefact there, and
+it only runs after the quality and equivalence gates have accepted it.
 """
 
 from __future__ import annotations
@@ -43,12 +44,26 @@ from src.data.preprocessing import (
 )
 from src.evaluation.promotion import constraint_violations
 from src.models.experiment import run_candidate
+from src.optimization.onnx import (
+    LATENCY_COMPARISON_FILENAME,
+    ONNX_FILENAME,
+    ONNX_METADATA_FILENAME,
+    compare_artifacts,
+    export_model,
+)
 
 METRICS_FILENAME = "metrics.json"
 MODEL_FILENAME = "model.pkl"
 # Everything a published model directory carries. search_log.csv is kept for
 # auditing which hyperparameters were tried.
-PUBLISHED_FILES = (MODEL_FILENAME, METRICS_FILENAME, "search_log.csv")
+PUBLISHED_FILES = (
+    MODEL_FILENAME,
+    ONNX_FILENAME,
+    METRICS_FILENAME,
+    ONNX_METADATA_FILENAME,
+    LATENCY_COMPARISON_FILENAME,
+    "search_log.csv",
+)
 
 _UNSAFE_RUN_ID = re.compile(r"[^A-Za-z0-9_.-]")
 
@@ -205,6 +220,62 @@ def evaluate_model(model_dir: str | Path) -> dict[str, Any]:
         "f1_macro": checked["f1_macro"],
         "recall_urgente": checked["recall_urgente"],
         "latency_p95_ms": checked["latency_p95_ms"],
+    }
+
+
+def export_onnx_model(model_dir: str | Path) -> dict[str, Any]:
+    """Exports the accepted sklearn pipeline and validates ONNX equivalence.
+
+    Args:
+        model_dir: Staging directory that passed ``evaluate_model``.
+
+    Returns:
+        Directory, artefact path and measured ONNX latency.
+
+    Raises:
+        QualityGateError: If ONNX predictions diverge from the sklearn model.
+        FileNotFoundError: If expected artefacts are missing.
+    """
+    model_dir = Path(model_dir)
+    metadata = export_model(model_dir)
+    comparison = compare_artifacts(model_dir)
+    max_mismatch_rate = float(
+        load_config()
+        .get("optimization", {})
+        .get("onnx", {})
+        .get("max_mismatch_rate", 0.0)
+    )
+    if comparison["mismatch_rate"] > max_mismatch_rate:
+        raise QualityGateError(
+            "ONNX divergente do modelo sklearn: "
+            f"{comparison['mismatches']} de "
+            f"{comparison['checked_predictions']} predicoes diferem "
+            f"({comparison['mismatch_rate']:.2%}; limite {max_mismatch_rate:.2%})."
+        )
+
+    metrics_path = model_dir / METRICS_FILENAME
+    payload = json.loads(metrics_path.read_text(encoding="utf-8"))
+    payload["onnx"] = {
+        "model_size_mb": metadata["onnx_model_size_mb"],
+        "equivalent_predictions": comparison["equivalent_predictions"],
+        "checked_predictions": comparison["checked_predictions"],
+        "mismatches": comparison["mismatches"],
+        "mismatch_rate": comparison["mismatch_rate"],
+        "max_mismatch_rate": max_mismatch_rate,
+        "latency": comparison["onnx_latency"],
+        "quality_metrics": comparison["onnx_quality"],
+        "comparison_file": LATENCY_COMPARISON_FILENAME,
+    }
+    metrics_path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
+
+    return {
+        "diretorio": str(model_dir),
+        "artefato": str(model_dir / ONNX_FILENAME),
+        "mismatch_rate": comparison["mismatch_rate"],
+        "max_mismatch_rate": max_mismatch_rate,
+        "latency_p95_ms": comparison["onnx_latency"]["latency_p95_ms"],
     }
 
 

@@ -8,6 +8,7 @@ dependencies = [
     "fastapi>=0.115",
     "joblib>=1.4",
     "numpy>=2.0",
+    "onnxruntime>=1.20",
     "pandas>=2.2",
     "prometheus-client>=0.21",
     "pyarrow>=17.0",
@@ -34,7 +35,6 @@ dev = [
 ]
 # Etapa 4 - otimizacao de latencia.
 onnx = [
-    "onnxruntime>=1.20",
     "skl2onnx>=1.17",
 ]
 

@@ -143,6 +143,7 @@ def test_pipeline_ponta_a_ponta_com_dados_sinteticos(tmp_path: Path) -> None:
     treino = run("scripts/train_serving_model.py")
     assert treino.returncode == 0, treino.stdout + treino.stderr
     assert "aprovado no quality gate" in treino.stdout
+    assert "onnx         aprovado" in treino.stdout
 
     publicado = tmp_path / "models" / load_config()["serving"]["model"]
     for arquivo in stages.PUBLISHED_FILES:
@@ -151,6 +152,7 @@ def test_pipeline_ponta_a_ponta_com_dados_sinteticos(tmp_path: Path) -> None:
 
     metricas = json.loads((publicado / "metrics.json").read_text(encoding="utf-8"))
     assert "medical_tc_train.csv" in metricas["dataset_sha256"]
+    assert metricas["onnx"]["mismatch_rate"] <= metricas["onnx"]["max_mismatch_rate"]
 
     modelo = joblib.load(publicado / "model.pkl")
     predicao = modelo.predict(["paciente com isquemia e infarto ventricular agudo"])

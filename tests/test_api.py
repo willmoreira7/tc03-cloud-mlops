@@ -67,8 +67,8 @@ def test_predict_retorna_probabilidades(client: TestClient) -> None:
 def test_predict_rejeita_texto_invalido(client: TestClient, texto: str) -> None:
     """Entrada malformada vira 422, nunca 500.
 
-    Um 500 poluiria o painel de taxa de erro da stack de monitoramento com o
-    que na verdade e erro do cliente.
+    Isso preserva o alerta de 5xx para falhas reais do servico, enquanto o
+    dashboard ainda mostra o 422 na taxa de erro HTTP.
     """
     resposta = client.post("/predict", json={"texto": texto})
     assert resposta.status_code == 422

@@ -118,8 +118,8 @@ O retreino é uma carga **batch, agendada e desacoplada da inferência**.
 |---------|-----------|
 | Orquestrador | Apache Airflow (DAG local via Docker no escopo do desafio) |
 | Execução em nuvem (equivalente) | Job em container disparado por EventBridge Scheduler, ou MWAA se o Airflow for gerenciado |
-| Fluxo da DAG | `ingest_data` → `preprocess_data` → `train_model` → `evaluate_model` → `publish_model` (`export_onnx` entra na Etapa 4) |
-| Artefato de saída | Hoje `model.pkl` + `metrics.json` em `models/<modelo>/`; `.onnx` a partir da Etapa 4 |
+| Fluxo da DAG | `ingest_data` → `preprocess_data` → `train_model` → `evaluate_model` → `export_onnx_model` → `publish_model` |
+| Artefato de saída | `model.pkl` + `model.onnx` + metadados em `models/<modelo>/` |
 | Gatilho | Agendado (`@weekly`) ou manual; degradação de métricas fica fora do escopo desta fase |
 | Promoção | Só publica se passar no quality gate (ADR 13) |
 
@@ -169,10 +169,10 @@ carrega um artefato pronto — isso mantém o serviço leve e o tempo de startup
 | 01 | Inferência real-time via REST | ✅ Aceita | Valor clínico depende de resposta imediata |
 | 02 | AWS: ECR + EC2 atrás de ALB | ✅ Aceita | Latência previsível, sem cold start; carga contínua não se beneficia de scale-to-zero |
 | 03 | Retreino desacoplado em job agendado | ✅ Aceita | Mantém a API leve e o startup previsível |
-| 04 | ONNX Runtime para inferência | 🟡 Proposta | Requisito de otimização da Etapa 4 |
+| 04 | ONNX Runtime para inferência | ✅ Aceita | Requisito de otimização da Etapa 4; p95 menor no comparativo local |
 | 05 | Modelo leve (TF-IDF + classificador linear) | ✅ Aceita | Latência e tamanho de artefato sobre acurácia máxima |
 | 06 | Modelo de produção escolhido por comparação em notebooks | ✅ Aceita | Decisão auditável e reproduzível |
-| 07 | Regra de promoção centralizada em `src/evaluation/promotion.py` | ✅ Aceita | Notebook, DAG e API não podem divergir sobre "melhor modelo" |
+| 07 | Regra de promoção centralizada em `src/evaluation/promotion.py` | ✅ Aceita | Notebook e DAG compartilham restrições; a API serve explicitamente o modelo configurado |
 | 08 | **Não** usar MLflow nesta fase | 🟡 Proposta | Não exigido pelo PDF; reavaliar após Etapas 1–3 |
 | 09 | **Não** usar DVC, Kubernetes ou Terraform | ✅ Aceita | Fora do escopo do enunciado |
 | 10 | API serve `tfidf_logreg`, não o promovido `tfidf_linear_svc` | ✅ Aceita | Empate técnico entre os dois; o LogReg expõe `predict_proba` e permite score de confiança |
@@ -188,7 +188,7 @@ carrega um artefato pronto — isso mantém o serviço leve e o tempo de startup
 > Sendo os dois equivalentes em qualidade, a escolha passou a ser guiada pelo contrato
 > da API: o `LinearSVC` não expõe `predict_proba`, e uma triagem clínica se beneficia
 > de score de confiança para permitir limiar ajustável. Ver
-> [MODEL_CARD.md](MODEL_CARD.md#-decisão-em-aberto).
+> [MODEL_CARD.md](MODEL_CARD.md#-decisão-fechada).
 
 ---
 

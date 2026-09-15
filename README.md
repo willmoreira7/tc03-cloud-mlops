@@ -148,12 +148,12 @@ declarado **antes** dos treinos.
        ↓
 07_model_comparison  →  aplica o critério de promoção
        ↓
-08_onnx_optimization →  otimiza o modelo promovido
+08_onnx_optimization →  otimiza o modelo servido
 ```
 
 **Critério:** maior **F1-macro** no teste, entre os modelos com recall de `urgente` ≥ 0,60
-e latência p95 ≤ 15 ms. A regra vive em `src/evaluation/promotion.py` e é consultada pelo
-notebook, pela DAG e pela API — nunca reimplementada.
+e latência p95 ≤ 15 ms. A regra vive em `src/evaluation/promotion.py`; a API serve
+explicitamente o modelo definido em `configs/model_config.yaml`.
 
 ### Resultado
 
@@ -264,7 +264,7 @@ ter 3.12 no sistema. Baixe o dataset e extraia os CSVs (`medical_tc_train.csv` e
 Um comando confirma que o ambiente está correto antes de qualquer outra coisa:
 
 ```bash
-uv sync --group dev
+uv sync --group dev --group onnx
 uv run python scripts/verify_setup.py
 ```
 
@@ -306,7 +306,7 @@ uv run jupyter lab notebooks/
 uv run python scripts/gen_synthetic_data.py --rows 3000
 
 # 2. Treine o modelo servido (um comando, ~1 min)
-uv run python scripts/train_serving_model.py
+uv run --group onnx python scripts/train_serving_model.py
 
 # 3. Suba a API
 docker compose up -d --build
@@ -316,10 +316,10 @@ docker compose up -d --build
 ```
 
 O passo 2 executa as mesmas etapas dos notebooks, na mesma ordem — os notebooks são o
-registro da análise, não um passo de build. O modelo é treinado em `models/_staging/` e só
-é publicado em `models/tfidf_logreg/` se passar no **quality gate** (o mesmo critério de
-promoção dos notebooks); se for reprovado, o comando sai com erro e a API continua com o
-modelo anterior.
+registro da análise, não um passo de build. O modelo é treinado em `models/_staging/`,
+exportado para ONNX e só é publicado em `models/tfidf_logreg/` se passar no **quality
+gate** e no gate de compatibilidade ONNX; se for reprovado, o comando sai com erro e a API
+continua com o modelo anterior.
 
 Classificando um laudo:
 
@@ -363,7 +363,7 @@ uv run nbqa ruff notebooks/          # lint dentro dos notebooks
 ```
 
 > Os testes da API são pulados automaticamente se o artefato do modelo não existir —
-> rode `uv run python scripts/train_serving_model.py` antes. No CI a variável
+> rode `uv run --group onnx python scripts/train_serving_model.py` antes. No CI a variável
 > `TC03_REQUIRE_MODEL=1` transforma esse skip em falha.
 
 ### CI/CD (GitHub Actions)
@@ -448,7 +448,7 @@ A stack de observabilidade (Etapa 3) sobe junto com a API num único comando:
 
 ```bash
 # Treine o modelo servido (pre-requisito da imagem)
-uv run python scripts/train_serving_model.py
+uv run --group onnx python scripts/train_serving_model.py
 
 # Suba a stack completa: API + Prometheus + Grafana
 docker compose up -d --build
@@ -484,6 +484,21 @@ O guia completo da Etapa 3 está em [`docs/MONITORING.md`](docs/MONITORING.md).
 
 ---
 
+### Otimização de Latência
+
+A Etapa 4 serve o `tfidf_logreg` com ONNX Runtime (`serving.runtime: onnx`). O `.pkl`
+continua sendo o baseline de comparação e artefato de auditoria.
+
+| Runtime | Formato | p50 (ms) | p95 (ms) | p99 (ms) | Tamanho |
+|---------|---------|----------|----------|----------|---------|
+| Baseline | `.pkl` | 0,86 | 1,21 | 1,32 | 0,125 MB |
+| Otimizado | `.onnx` | 0,07 | 0,09 | 0,11 | 0,089 MB |
+
+Medição local sobre corpus sintético, com 50 warm-ups e 1.000 chamadas single-sample por
+runtime. Evidência versionada em [`docs/assets/latency_comparison.csv`](docs/assets/latency_comparison.csv).
+
+---
+
 ## 🗺️ Roadmap das Etapas
 
 | Etapa | Disciplina | Entregável | Status |
@@ -492,7 +507,7 @@ O guia completo da Etapa 3 está em [`docs/MONITORING.md`](docs/MONITORING.md).
 | **1** | Deploy em Nuvem | API FastAPI em Docker + decisão arquitetural | ✅ Concluída |
 | **2** | CI/CD e Pipeline de Treino | Workflow GitHub Actions + DAG Airflow | ✅ Concluída |
 | **3** | Monitoração de Performance | Docker Compose + dashboard Grafana | ✅ Concluída |
-| **4** | Latência em Modelos Não Estruturados | Modelo otimizado + comparativo + vídeo | 🟡 Modelo selecionado; otimização pendente |
+| **4** | Latência em Modelos Não Estruturados | Modelo otimizado + comparativo + vídeo | 🟡 Técnica concluída; vídeo pendente |
 
 > 📄 Detalhamento de tarefas e critérios de aceite em **[docs/ROADMAP.md](docs/ROADMAP.md)**.
 
@@ -517,7 +532,7 @@ O guia completo da Etapa 3 está em [`docs/MONITORING.md`](docs/MONITORING.md).
 |-----------|----------|
 | [docs/ARQUITETURA.md](docs/ARQUITETURA.md) | Decisão arquitetural de nuvem, batch vs. real-time, trade-offs |
 | [docs/NOTEBOOKS.md](docs/NOTEBOOKS.md) | Fluxo de notebooks, métricas e **critério de promoção do modelo** |
-| [docs/MODEL_CARD.md](docs/MODEL_CARD.md) | Model Card do modelo promovido — uso pretendido, limitações, vieses |
+| [docs/MODEL_CARD.md](docs/MODEL_CARD.md) | Model Card do modelo servido — uso pretendido, limitações, vieses e otimização |
 | [docs/MONITORING.md](docs/MONITORING.md) | Como validar Prometheus, Grafana, métricas, queries e dashboard da Etapa 3 |
 | [docs/ROADMAP.md](docs/ROADMAP.md) | Etapas, tarefas, entregáveis e critérios de aceite |
 | [docs/DATASET.md](docs/DATASET.md) | Escolha do dataset, esquema e estratégia de rotulagem |
@@ -532,7 +547,7 @@ O guia completo da Etapa 3 está em [`docs/MONITORING.md`](docs/MONITORING.md).
 |------|----|------------------|
 | _a preencher_ | _a preencher_ | _a preencher_ |
 
-**Vídeo STAR:** _link a preencher (Etapa 4)_
+**Vídeo STAR:** roteiro em [`docs/VIDEO_STAR.md`](docs/VIDEO_STAR.md); link final a preencher após gravação.
 
 ---
 

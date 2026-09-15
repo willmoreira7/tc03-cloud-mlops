@@ -1,7 +1,8 @@
 """Retreino agendado do modelo de triagem de laudos.
 
 ```
-ingest_data -> preprocess_data -> train_model -> evaluate_model -> publish_model
+ingest_data -> preprocess_data -> train_model -> evaluate_model ->
+export_onnx_model -> publish_model
 ```
 
 | Task | O que faz |
@@ -10,7 +11,8 @@ ingest_data -> preprocess_data -> train_model -> evaluate_model -> publish_model
 | `preprocess_data` | Mapeia urgencia, limpa e grava os splits em parquet |
 | `train_model` | Treina o modelo servido em `models/_staging/<run_id>/` |
 | `evaluate_model` | **Quality gate**: criterio de promocao; reprova sem retry |
-| `publish_model` | Move o artefato aprovado para `models/<modelo>/`, onde a API le |
+| `export_onnx_model` | Exporta ONNX e valida equivalencia com o `.pkl` |
+| `publish_model` | Move os artefatos aprovados para `models/<modelo>/`, onde a API le |
 
 Cada task apenas chama `src/pipeline/stages.py` -- a mesma funcao que o
 `scripts/train_serving_model.py` usa. A DAG nao tem logica de pipeline propria.
@@ -78,18 +80,26 @@ def retreino_triagem() -> None:
             raise AirflowFailException(str(erro)) from erro
 
     @task
-    def publish_model(
-        evaluation: dict[str, Any], ingest: dict[str, Any]
-    ) -> dict[str, Any]:
+    def export_onnx_model(evaluation: dict[str, Any]) -> dict[str, Any]:
         from src.pipeline import stages
 
-        return stages.publish_model(evaluation["diretorio"], ingest)
+        try:
+            return stages.export_onnx_model(evaluation["diretorio"])
+        except stages.QualityGateError as erro:
+            raise AirflowFailException(str(erro)) from erro
+
+    @task
+    def publish_model(onnx: dict[str, Any], ingest: dict[str, Any]) -> dict[str, Any]:
+        from src.pipeline import stages
+
+        return stages.publish_model(onnx["diretorio"], ingest)
 
     ingest = ingest_data()
     preprocess = preprocess_data(ingest)
     train = train_model(preprocess)
     evaluation = evaluate_model(train)
-    publish_model(evaluation, ingest)
+    onnx = export_onnx_model(evaluation)
+    publish_model(onnx, ingest)
 
 
 retreino_triagem()

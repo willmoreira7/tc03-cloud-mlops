@@ -5,7 +5,7 @@ the exact command that fixes it, and the script never stops at the first
 problem -- it reports all of them at once.
 
 Usage:
-    uv run python scripts/verify_setup.py
+    uv run --group onnx python scripts/verify_setup.py
 """
 
 from __future__ import annotations
@@ -22,8 +22,18 @@ OK = "[ OK ]"
 FALTA = "[FALTA]"
 AVISO = "[AVISO]"
 
-PACOTES_BASE = ["fastapi", "uvicorn", "joblib", "numpy", "sklearn", "yaml", "pydantic"]
+PACOTES_BASE = [
+    "fastapi",
+    "uvicorn",
+    "joblib",
+    "numpy",
+    "onnxruntime",
+    "sklearn",
+    "yaml",
+    "pydantic",
+]
 PACOTES_DEV = ["pytest", "ruff", "jupyter_core", "matplotlib", "seaborn"]
+PACOTES_ONNX = ["skl2onnx"]
 
 
 class Relatorio:
@@ -61,7 +71,7 @@ def checar_pacotes(rel: Relatorio) -> None:
     if faltando_base:
         rel.falta(
             f"Dependencias de runtime ausentes: {', '.join(faltando_base)}",
-            "uv sync --group dev",
+            "uv sync --group dev --group onnx",
         )
     else:
         rel.ok(f"Dependencias de runtime ({len(PACOTES_BASE)} pacotes)")
@@ -70,10 +80,19 @@ def checar_pacotes(rel: Relatorio) -> None:
     if faltando_dev:
         rel.falta(
             f"Dependencias de desenvolvimento ausentes: {', '.join(faltando_dev)}",
-            "uv sync --group dev",
+            "uv sync --group dev --group onnx",
         )
     else:
         rel.ok(f"Dependencias de desenvolvimento ({len(PACOTES_DEV)} pacotes)")
+
+    faltando_onnx = [p for p in PACOTES_ONNX if not _importavel(p)]
+    if faltando_onnx:
+        rel.falta(
+            f"Dependencias de exportacao ONNX ausentes: {', '.join(faltando_onnx)}",
+            "uv sync --group dev --group onnx",
+        )
+    else:
+        rel.ok(f"Dependencias ONNX ({len(PACOTES_ONNX)} pacote)")
 
 
 def _importavel(nome: str) -> bool:
@@ -93,7 +112,7 @@ def checar_projeto(rel: Relatorio) -> None:
         config = load_config()
         rel.ok(f"Modulos do projeto (modelo servido: {config['serving']['model']})")
     except Exception as erro:  # noqa: BLE001 - queremos reportar qualquer falha
-        rel.falta(f"Falha ao importar src/: {erro}", "uv sync --group dev")
+        rel.falta(f"Falha ao importar src/: {erro}", "uv sync --group dev --group onnx")
 
 
 def checar_dados(rel: Relatorio) -> None:
@@ -131,7 +150,7 @@ def checar_modelo(rel: Relatorio) -> None:
         rel.aviso(
             f"Artefato ausente: {classifier.path}",
             "Necessario antes de construir a imagem: "
-            "uv run python scripts/train_serving_model.py",
+            "uv run --group onnx python scripts/train_serving_model.py",
         )
 
 

@@ -53,9 +53,9 @@ notebooks/
 05_tfidf_rf ───────┤  (independentes entre si)
 06_tfidf_svc ──────┘
    ↓
-07_model_comparison       ← decide o modelo promovido
+07_model_comparison       ← decide o modelo elegivel e registra o empate técnico
    ↓
-08_onnx_optimization      ← otimiza o modelo promovido (Etapa 4)
+08_onnx_optimization      ← otimiza o modelo servido (Etapa 4)
 ```
 
 ---
@@ -263,14 +263,16 @@ equivalentes; a regra apenas escolheu um de forma reproduzível. Ver a
 **4. Não houve overfitting na busca.** Nenhum candidato variou mais que ±0,008 de F1-macro
 entre validação e teste.
 
-**5. O erro clinicamente caro persiste.** 49 de 372 casos `urgente` (13,2%) foram
-classificados como `normal` pelo modelo promovido.
+**5. O erro clinicamente caro persiste.** 51 de 372 casos `urgente` (13,7%) foram
+classificados como `normal` pelo modelo servido (`tfidf_logreg`).
 
 ### 🔒 A regra vive em código, não no notebook
 
-A função que escolhe o vencedor vive em `src/evaluation/promotion.py` e é única: o
-notebook, a DAG do Airflow e a API a consultam. Se cada um implementasse a própria regra,
-os três divergiriam silenciosamente sobre qual é o modelo de produção.
+A função que escolhe o vencedor vive em `src/evaluation/promotion.py`. O notebook a usa
+para tornar a escolha reproduzível; a DAG treina o modelo configurado em
+`configs/model_config.yaml` e aplica o mesmo quality gate antes de publicar. A API serve
+explicitamente esse modelo configurado, porque a decisão `LinearSVC` versus LogReg envolve
+também contrato de resposta (`predict_proba`).
 
 ```python
 # src/evaluation/promotion.py
@@ -293,16 +295,16 @@ def select_promoted_model(comparison: pd.DataFrame) -> str:
 ## 8️⃣ Otimização ONNX (`08_onnx_optimization.ipynb`)
 
 **Propósito:** aplicar a otimização de latência exigida na Etapa 4 sobre o modelo
-promovido, e medir o ganho.
+servido (`tfidf_logreg`) e medir o ganho.
 
 | | |
 |---|---|
-| **Inputs** | `models/<promovido>/model.pkl`, `data/processed/test.parquet` |
-| **Outputs** | `models/production/model.onnx`, `models/evaluation/latency_comparison.csv` |
+| **Inputs** | `models/tfidf_logreg/model.pkl`, `data/processed/test.parquet` |
+| **Outputs** | `models/tfidf_logreg/model.onnx`, `models/tfidf_logreg/onnx_metadata.json`, `models/tfidf_logreg/latency_comparison.csv` |
 
 **Etapas:**
 1. Converter o `Pipeline` completo para ONNX com `skl2onnx`
-2. **Validar equivalência de predições** entre `.pkl` e `.onnx` no split de teste
+2. **Validar compatibilidade de predições** entre `.pkl` e `.onnx` no split de teste
 3. Medir latência do ONNX Runtime com o mesmo protocolo da seção anterior
 4. Comparar tamanho do artefato
 5. Preencher a tabela comparativa do [ROADMAP.md](ROADMAP.md)
@@ -314,8 +316,8 @@ promovido, e medir o ganho.
 > quantização do estimador, também aceita pelo enunciado.
 
 > ✅ **Passo obrigatório:** o modelo ONNX só substitui o `.pkl` na API depois que a
-> equivalência de predições for verificada. Um modelo mais rápido que responde diferente
-> não é uma otimização.
+> compatibilidade de predições for verificada. O gate aceita no máximo 1% de divergência,
+> porque diferenças numéricas podem trocar a classe em exemplos exatamente na fronteira.
 
 ---
 

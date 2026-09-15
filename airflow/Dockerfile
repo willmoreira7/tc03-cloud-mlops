@@ -15,19 +15,19 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /bin/uv
 WORKDIR /src
 COPY pyproject.toml uv.lock ./
 
-# Apenas o que o pipeline de treino importa. fastapi, uvicorn e pydantic ficam
-# de fora: o proprio Airflow depende deles e trocar suas versoes quebraria o
-# api-server.
+# Apenas o que o pipeline de treino/exportacao importa. fastapi, uvicorn e
+# pydantic ficam de fora: o proprio Airflow depende deles e trocar suas versoes
+# quebraria o api-server.
 #
 # As versoes vem do lock, e nao de um range, por um motivo concreto: o modelo
 # e serializado com pickle. Um scikit-learn diferente do da API geraria um
 # artefato que a API nao carrega, ou carrega com comportamento diferente.
-RUN uv export --frozen --no-dev --no-emit-project --no-hashes \
+RUN uv export --frozen --group onnx --no-dev --no-emit-project --no-hashes \
         --no-annotate --no-header \
-    | grep -E '^(joblib|numpy|pandas|pyarrow|pyyaml|scikit-learn|scipy|threadpoolctl)==' \
+    | grep -E '^(flatbuffers|joblib|ml-dtypes|numpy|onnx|onnxruntime|packaging|pandas|protobuf|pyarrow|pyyaml|scikit-learn|scipy|skl2onnx|threadpoolctl)==' \
     > requirements-train.txt \
     && cat requirements-train.txt \
-    && test "$(wc -l < requirements-train.txt)" -eq 8
+    && test "$(wc -l < requirements-train.txt)" -eq 15
 
 
 # 2) Airflow + dependencias de treino.

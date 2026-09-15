@@ -13,7 +13,7 @@
 | [1 — Arquitetura e API](#-etapa-1--decisão-arquitetural-e-api-inicial) | Deploy em Nuvem | 15% (doc) | ✅ Concluída |
 | [2 — CI/CD e Pipeline](#-etapa-2--cicd-e-pipeline-automatizado) | CI/CD e Pipeline de Treino | 30% | ✅ Concluída |
 | [3 — Monitoramento](#-etapa-3--monitoramento-e-observabilidade) | Monitoração de Performance | 20% | ✅ Concluída |
-| [4 — Otimização e Entrega](#-etapa-4--otimização-de-latência-e-entrega) | Latência em Modelos Não Estruturados | 35% | 🟡 Modelo selecionado; otimização pendente |
+| [4 — Otimização e Entrega](#-etapa-4--otimização-de-latência-e-entrega) | Latência em Modelos Não Estruturados | 35% | 🟡 Técnica concluída; vídeo pendente |
 
 **Legenda:** ⬜ não iniciada · 🟡 em andamento · ✅ concluída · 🔴 bloqueada
 
@@ -64,9 +64,9 @@ Conferência item a item do que o enunciado exige.
 | Tarefa do enunciado | Status |
 |--------------------|--------|
 | Treinar o classificador de texto | ✅ 5 candidatos comparados no mesmo split |
-| Aplicar técnica de otimização (ONNX / quantização) | ⬜ **Pendente** |
-| Comparar latência original × otimizado | ⬜ **Pendente** |
-| Gravar o vídeo STAR | ⬜ Pendente |
+| Aplicar técnica de otimização (ONNX / quantização) | ✅ ONNX Runtime |
+| Comparar latência original × otimizado | ✅ `docs/assets/latency_comparison.csv` |
+| Gravar o vídeo STAR | 🟡 Roteiro pronto em `docs/VIDEO_STAR.md` |
 
 > ⚠️ **Atenção ao critério "Modelagem e Otimização" (20%).** O enunciado exige *"modelo
 > funcional de NLP, conversão/otimização bem-sucedida e melhoria de latência
@@ -291,14 +291,15 @@ Docker Compose rodando a stack completa + print/JSON do dashboard.
 - [x] Executar os notebooks `01` a `06` — EDA, splits e modelos candidatos
 - [x] Rodar `07_model_comparison` e promover o vencedor pelo critério declarado
 - [x] Registrar métricas de qualidade (F1-macro, recall por classe, matriz de confusão)
-- [ ] Decidir entre `tfidf_linear_svc` e `tfidf_logreg` ([MODEL_CARD.md](MODEL_CARD.md#-decisão-em-aberto))
-- [ ] Criar o notebook `08_onnx_optimization`
-- [ ] Aplicar técnica de otimização — **exportação para ONNX Runtime** (ou quantização)
-- [ ] Validar equivalência de predições entre `.pkl` e `.onnx`
-- [ ] Comparar latência: modelo original × modelo otimizado
-- [ ] Substituir o modelo servido pela API pelo artefato otimizado
-- [ ] **Preencher e commitar o [MODEL_CARD.md](MODEL_CARD.md)**
-- [ ] Gravar o vídeo STAR (≤ 5 min)
+- [x] Decidir entre `tfidf_linear_svc` e `tfidf_logreg` — API serve `tfidf_logreg`
+- [x] Criar o notebook `08_onnx_optimization`
+- [x] Aplicar técnica de otimização — **exportação para ONNX Runtime**
+- [x] Validar compatibilidade de predições entre `.pkl` e `.onnx`
+- [x] Comparar latência: modelo original × modelo otimizado
+- [x] Substituir o modelo servido pela API pelo artefato otimizado
+- [x] **Preencher e commitar o [MODEL_CARD.md](MODEL_CARD.md)**
+- [x] Preparar roteiro do vídeo STAR (≤ 5 min)
+- [ ] Gravar vídeo STAR e preencher o link final
 
 > 📄 Fluxo dos notebooks, métricas e protocolo de medição em [NOTEBOOKS.md](NOTEBOOKS.md).
 
@@ -310,9 +311,12 @@ Docker Compose rodando a stack completa + print/JSON do dashboard.
 
 | Modelo | Formato | p50 (ms) | p95 (ms) | Tamanho | Accuracy |
 |--------|---------|----------|----------|---------|----------|
-| Baseline | `.pkl` (scikit-learn) | — | — | — | — |
-| Otimizado | `.onnx` (ONNX Runtime) | — | — | — | — |
-| **Ganho** | | — | — | — | — |
+| Baseline | `.pkl` (scikit-learn) | 0,86 | 1,21 | 0,125 MB | 0,9556* |
+| Otimizado | `.onnx` (ONNX Runtime) | 0,07 | 0,09 | 0,089 MB | 0,9533* |
+| **Ganho** | | **12,8x** | **12,9x** | **28,8% menor** | −0,0023 |
+
+\* Medição local sobre corpus sintético, porque o dataset real não é versionado. A tabela
+serve para validar a otimização e o pipeline; métricas reais históricas ficam no Model Card.
 
 > ℹ️ Comparar sob **as mesmas condições**: mesma máquina, mesmo lote de entradas, mesmo
 > número de execuções, descartando as primeiras chamadas (warm-up). Sem isso o
@@ -333,9 +337,9 @@ Modelo otimizado + resultados comparativos de latência + Model Card + link do v
 
 ### ✅ Critério de aceite
 
-- Tabela comparativa preenchida com números medidos, não estimados
-- Equivalência de predições entre `.pkl` e `.onnx` verificada e registrada
-- `git ls-files docs/MODEL_CARD.md` retorna o arquivo **e** ele está preenchido
+- [x] Tabela comparativa preenchida com números medidos, não estimados
+- [x] Compatibilidade de predições entre `.pkl` e `.onnx` verificada e registrada
+- [x] `git ls-files docs/MODEL_CARD.md` retorna o arquivo **e** ele está preenchido
 
 > ⚠️ Verificar artefato com `test -f` no CI prova que ele foi *gerado*, não que está
 > *versionado*. Para o que o avaliador precisa ler, a checagem certa é `git ls-files`.
