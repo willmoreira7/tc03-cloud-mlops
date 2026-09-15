@@ -430,13 +430,19 @@ lint ──┬──► test ──► build
 > o pipeline funciona, não a qualidade do modelo — essa está no
 > [MODEL_CARD.md](docs/MODEL_CARD.md).
 
+> O deploy automático no cluster de demonstração não fica no workflow: ele exigiria
+> credenciais do cluster no GitHub Actions e poderia publicar uma imagem treinada com
+> corpus sintético. A entrega contínua coberta pelo CI é a imagem validada por testes,
+> smoke test e manifestos versionados; a publicação no ambiente acadêmico é um passo
+> manual e credenciado.
+
 ### Retreino com Airflow
 
 A DAG [`retreino_triagem`](airflow/dags/retreino_triagem.py) roda semanalmente e chama as
 mesmas funções de `src/pipeline/stages.py` que o script de treino:
 
 ```
-ingest_data → preprocess_data → train_model → evaluate_model → publish_model
+ingest_data → preprocess_data → train_model → evaluate_model → export_onnx_model → publish_model
 ```
 
 | Task | O que faz |
@@ -445,6 +451,7 @@ ingest_data → preprocess_data → train_model → evaluate_model → publish_m
 | `preprocess_data` | Mapeia urgência, limpa e grava os splits |
 | `train_model` | Treina o modelo servido em `models/_staging/<run_id>/` |
 | `evaluate_model` | **Quality gate**: recall `urgente` ≥ 0,60 e p95 ≤ 15 ms; falha sem retry |
+| `export_onnx_model` | Exporta o `.onnx`, compara com o `.pkl` e reaplica o quality gate no runtime servido |
 | `publish_model` | Move o artefato aprovado para `models/tfidf_logreg/` com troca atômica |
 
 ```bash
@@ -595,4 +602,4 @@ no [Model Card](docs/MODEL_CARD.md#-otimização-e-latência).
 
 ---
 
-**Última atualização:** 2026-09-14
+**Última atualização:** 2026-09-15

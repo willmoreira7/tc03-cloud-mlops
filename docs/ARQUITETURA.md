@@ -260,4 +260,4 @@ otimização em vez de demonstrá-la.
 
 ---
 
-**Última atualização:** 2026-09-14
+**Última atualização:** 2026-09-15

@@ -47,9 +47,9 @@ Conferência item a item do que o enunciado exige.
 | Prática | Exigência | Status |
 |---------|-----------|--------|
 | CI/CD com ≥ 2 automações | lint + testes | ✅ 5 jobs: lint, testes, build, DAG, commitlint |
-| DAG Airflow funcional | dados → treino → salvamento | ✅ Executada de ponta a ponta no CI |
+| DAG Airflow funcional | dados → treino → ONNX → publicação | ✅ Executada de ponta a ponta no CI |
 | Dashboard Grafana | ≥ 3 painéis | ✅ Etapa 3 (8 painéis) |
-| Otimização de performance | ≥ 1 técnica (ONNX, quantização ou pruning) | ⬜ Etapa 4 |
+| Otimização de performance | ≥ 1 técnica (ONNX, quantização ou pruning) | ✅ Etapa 4 (ONNX Runtime) |
 
 ### Dataset
 
@@ -68,11 +68,9 @@ Conferência item a item do que o enunciado exige.
 | Comparar latência original × otimizado | ✅ `docs/assets/latency_comparison.csv` |
 | Gravar o vídeo STAR | 🟡 Roteiro pronto em `docs/VIDEO_STAR.md` |
 
-> ⚠️ **Atenção ao critério "Modelagem e Otimização" (20%).** O enunciado exige *"modelo
-> funcional de NLP, conversão/otimização bem-sucedida e melhoria de latência
-> demonstrada"* — são **três** partes. O modelo funcional está entregue; a conversão e o
-> comparativo de latência, não. Sem o notebook `08`, esse critério fica parcialmente
-> atendido.
+> ✅ **Critério "Modelagem e Otimização" coberto tecnicamente.** O modelo NLP está
+> funcional, o ONNX Runtime foi implementado e o comparativo de latência está versionado.
+> O único item pendente da entrega final é gravar e anexar o vídeo STAR.
 
 ---
 
@@ -203,10 +201,10 @@ mas afeta tempo de build e de deploy.
 
 ```
             src/pipeline/stages.py
-   ingest → preprocess → train → evaluate → publish
-        ▲                   ▲                  ▲
-        │                   │                  │
- train_serving_model.py   DAG Airflow      job "test" do CI
+   ingest → preprocess → train → evaluate → export_onnx → publish
+        ▲                   ▲                         ▲
+        │                   │                         │
+ train_serving_model.py   DAG Airflow             job "test" do CI
 ```
 
 - **Uma implementação, três chamadores.** Script, DAG e CI chamam as mesmas funções de
@@ -356,14 +354,14 @@ Modelo otimizado + resultados comparativos de latência + Model Card + link do v
 
 | Risco | Impacto | Mitigação |
 |-------|---------|-----------|
-| Dataset não definido trava as Etapas 2 e 4 | 🔴 Alto | Fechar a escolha ainda na Etapa 0 — ver [DATASET.md](DATASET.md) |
+| Dataset não definido trava as Etapas 2 e 4 | 🟢 Baixo | ✅ Mitigado: Medical Abstracts TC Corpus definido em [DATASET.md](DATASET.md) |
 | Airflow local é pesado para subir | 🟢 Baixo | ✅ Mitigado: modo `standalone` num único container, em compose separado da API |
-| `TfidfVectorizer` não converter para ONNX | 🔴 Alto | Validar a conversão já na Etapa 1, com pipeline mínimo; contingência é quantização |
-| Ganho de latência do ONNX ser marginal em modelo já leve | 🟡 Médio | Medir com rigor; ganho pequeno bem medido vale mais que número inflado |
+| `TfidfVectorizer` não converter para ONNX | 🟢 Baixo | ✅ Mitigado: normalização textual movida para Python e conversão validada no pipeline |
+| Ganho de latência do ONNX ser marginal em modelo já leve | 🟢 Baixo | ✅ Mitigado: ganho medido de 2,5x no p95 sobre o corpus real |
 | Nenhum modelo passar nas restrições de promoção | 🟡 Médio | Limiares definidos na Etapa 0 devem ser realistas; revisá-los exige registrar a mudança |
 | Vídeo estourar 5 minutos | 🟡 Médio | Roteirizar e ensaiar antes de gravar |
 | Commits fora do padrão quebrando o histórico | 🟢 Baixo | Husky + commitlint instalados na Etapa 0 |
 
 ---
 
-**Última atualização:** 2026-09-14
+**Última atualização:** 2026-09-15
