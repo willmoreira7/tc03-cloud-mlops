@@ -236,6 +236,20 @@ tc03-cloud-mlops/
 
 ---
 
+## 🌐 Ambiente Publicado
+
+Serviços em execução no cluster Kubernetes (instalados via Helm):
+
+| Serviço    | URL                                   | Login   | Senha                              |
+|------------|---------------------------------------|---------|------------------------------------|
+| Airflow    | https://airflow.pocsarcotech.com/     | `admin` | `OG5x8547V_8R4qmE8_tgHvRdgjl5bPuE` |
+| Grafana    | https://grafana.pocsarcotech.com      | `admin` | `STbREguNJJg1lfor6j-Gk2jGeVNNip44` |
+| Prometheus | https://prometheus.pocsarcotech.com   | —       | —                                  |
+
+> ⚠️ Credenciais publicadas intencionalmente: ambiente de laboratório acadêmico (pós-graduação).
+
+---
+
 ## 🚀 Como Executar
 
 ### Pré-requisitos
