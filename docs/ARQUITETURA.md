@@ -197,10 +197,11 @@ carrega um artefato pronto — isso mantém o serviço leve e o tempo de startup
 > Para **reproduzir** o projeto, siga apenas os comandos do README: nada no CI, na imagem
 > construída pelo `Dockerfile` ou nos testes depende de `helm/`.
 
-> ⚠️ **Credenciais do ambiente publicado.** Senhas de Airflow e Grafana não ficam
-> versionadas no repositório. Para avaliação, o acesso deve ser compartilhado diretamente
-> com a banca/professor. Isso evita tratar um ambiente acadêmico como exceção insegura e
-> mantém o repositório aderente a boas práticas de MLOps.
+> ⚠️ **Credenciais do ambiente publicado.** O README expõe usuário e senha de Airflow e
+> Grafana. É uma escolha deliberada de laboratório acadêmico, registrada aqui para que não
+> seja lida como vazamento acidental. Duas ressalvas técnicas: o repositório é público, e a
+> UI do Airflow permite executar código arbitrário no cluster. Se o ambiente sobreviver à
+> entrega, o caminho é trocar as senhas e movê-las para um secret.
 
 > ℹ️ **Sobre a ADR 10.** A regra de promoção elegeu o `tfidf_linear_svc`, mas a
 > diferença para o `tfidf_logreg` é de 0,0093 em F1-macro — dentro do limiar de empate

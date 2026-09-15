@@ -257,15 +257,14 @@ instalados via Helm; a API é aplicada com `kubectl apply -f helm/triagem-api.ya
 imagem [`mmacanmunhoz/tc03-triagem-api`](https://hub.docker.com/r/mmacanmunhoz/tc03-triagem-api)
 do Docker Hub com o modelo embutido.
 
-| Serviço    | URL                                   | Acesso |
-|------------|---------------------------------------|--------|
-| API        | https://triagem.pocsarcotech.com/docs | Público no ambiente de demonstração |
-| Airflow    | https://airflow.pocsarcotech.com/     | Credenciais compartilhadas fora do repositório |
-| Grafana    | https://grafana.pocsarcotech.com      | Credenciais compartilhadas fora do repositório |
-| Prometheus | https://prometheus.pocsarcotech.com   | Público no ambiente de demonstração |
+| Serviço    | URL                                   | Login   | Senha                              |
+|------------|---------------------------------------|---------|------------------------------------|
+| API        | https://triagem.pocsarcotech.com/docs | —       | —                                  |
+| Airflow    | https://airflow.pocsarcotech.com/     | `admin` | `OG5x8547V_8R4qmE8_tgHvRdgjl5bPuE` |
+| Grafana    | https://grafana.pocsarcotech.com      | `admin` | `STbREguNJJg1lfor6j-Gk2jGeVNNip44` |
+| Prometheus | https://prometheus.pocsarcotech.com   | —       | —                                  |
 
-> ⚠️ As senhas do ambiente publicado não são versionadas. Para avaliação, elas devem ser
-> compartilhadas diretamente com a banca/professor.
+> ⚠️ Credenciais publicadas intencionalmente: ambiente de laboratório acadêmico (pós-graduação).
 >
 > Este cluster é o ambiente de **demonstração** e não substitui a execução local: o
 > entregável reproduzível do enunciado é a stack em Docker Compose descrita em
