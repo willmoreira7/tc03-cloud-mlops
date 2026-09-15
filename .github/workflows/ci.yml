@@ -90,7 +90,7 @@ jobs:
           enable-cache: true
 
       - name: Instalar dependencias
-        run: uv sync --group dev --locked
+        run: uv sync --group dev --group onnx --locked
 
       - name: Gerar corpus sintetico
         run: uv run python scripts/gen_synthetic_data.py --rows "$SYNTHETIC_ROWS"
@@ -224,4 +224,7 @@ jobs:
       - name: Verificar modelo publicado pela DAG
         run: |
           test -f models/tfidf_logreg/model.pkl
-          jq -e '.run_id and .dataset_sha256' models/tfidf_logreg/metrics.json
+          test -f models/tfidf_logreg/model.onnx
+          test -f models/tfidf_logreg/onnx_metadata.json
+          test -f models/tfidf_logreg/latency_comparison.csv
+          jq -e '.run_id and .dataset_sha256 and .onnx.mismatch_rate <= .onnx.max_mismatch_rate' models/tfidf_logreg/metrics.json

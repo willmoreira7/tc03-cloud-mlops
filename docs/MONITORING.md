@@ -34,7 +34,7 @@ Pré-requisito: o artefato do modelo precisa existir, pois a imagem Docker copia
 `models/` para dentro do container.
 
 ```bash
-uv run python scripts/train_serving_model.py
+uv run --group onnx python scripts/train_serving_model.py
 docker compose up -d --build
 docker compose ps
 ```
@@ -149,7 +149,7 @@ uv run ruff format --check src/ scripts/ tests/
 
 | Sintoma | Causa provável | Correção |
 |---------|----------------|----------|
-| API não sobe | `models/tfidf_logreg/model.pkl` ausente | rode `uv run python scripts/train_serving_model.py` |
+| API não sobe | `models/tfidf_logreg/model.onnx` ausente | rode `uv run --group onnx python scripts/train_serving_model.py` |
 | Prometheus target DOWN | API ainda iniciando ou path errado | abra `http://localhost:8000/metrics/` e veja `monitoring/prometheus/prometheus.yml` |
 | Grafana sem dashboard | provisionamento não montado | confira volume `./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro` |
 | Painel de classes vazio | nenhuma predição válida após o último scrape | rode `scripts/generate_load.py` e aguarde 15s |

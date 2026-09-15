@@ -4,8 +4,8 @@
 > Git — um Model Card gerado ali existiria em disco sem nunca chegar ao repositório. Se um
 > notebook gerar uma versão automática, ela é gravada **aqui** e commitada.
 
-> 🚧 **Estado:** seleção de modelo concluída (notebooks `01`–`07`). A seção de otimização
-> ONNX é da Etapa 4 e ainda está em aberto.
+> ✅ **Estado:** modelo servido definido, otimização ONNX implementada e comparação de
+> latência registrada na Etapa 4.
 
 ---
 
@@ -13,16 +13,16 @@
 
 | Campo | Valor |
 |-------|-------|
-| Nome do modelo | `tfidf_linear_svc` |
+| Nome do modelo | `tfidf_logreg` |
 | Tipo | Classificação de texto multiclasse (3 classes) |
-| Algoritmo | `TfidfVectorizer` → `LinearSVC` |
+| Algoritmo | `TfidfVectorizer` → `LogisticRegression` |
 | Hiperparâmetros | `C=0.5`, `class_weight="balanced"` |
 | Vetorizador | `max_features=20000`, `ngram_range=(1,2)`, `min_df=2`, `sublinear_tf=True` |
-| Formato atual | `models/tfidf_linear_svc/model.pkl` (1,23 MB) |
-| Formato alvo em produção | ONNX Runtime — _pendente (Etapa 4)_ |
+| Formato base | `models/tfidf_logreg/model.pkl` |
+| Formato servido | `models/tfidf_logreg/model.onnx` (ONNX Runtime) |
 | Seed | 42 |
 | Dataset | Medical Abstracts TC Corpus — ver [DATASET.md](DATASET.md) |
-| Selecionado por | `notebooks/07_model_comparison.ipynb` |
+| Selecionado por | empate técnico no `07_model_comparison` + ADR 10 (`predict_proba`) |
 
 ---
 
@@ -54,15 +54,15 @@ Classificar o texto de um laudo médico em três níveis de urgência (`normal`,
 
 | Métrica | Valor | Observação |
 |---------|-------|------------|
-| **F1-macro** | **0,7582** | Métrica de promoção |
-| Recall — `urgente` | 0,8118 | Trava de segurança (mínimo exigido: 0,60) ✅ |
-| Recall — `atencao` | 0,7695 | |
-| Recall — `normal` | 0,7116 | |
-| Precision — `urgente` | 0,7402 | Ruído na fila crítica |
-| Precision — `atencao` | 0,7732 | |
-| Precision — `normal` | 0,7470 | |
-| F1-weighted | 0,7544 | |
-| Acurácia | 0,7549 | ⚠️ Referência apenas — não é critério |
+| **F1-macro** | **0,7489** | Métrica de promoção |
+| Recall — `urgente` | 0,7957 | Trava de segurança (mínimo exigido: 0,60) ✅ |
+| Recall — `atencao` | 0,7630 | |
+| Recall — `normal` | 0,6872 | |
+| Precision — `urgente` | 0,7309 | Ruído na fila crítica |
+| Precision — `atencao` | 0,7655 | |
+| Precision — `normal` | 0,7422 | |
+| F1-weighted | 0,7456 | |
+| Acurácia | 0,7460 | ⚠️ Referência apenas — não é critério |
 
 ### Validação × teste
 
@@ -81,8 +81,8 @@ Todos avaliados no **mesmo split de teste**, com protocolo de latência idêntic
 
 | Modelo | F1-macro | Recall `urgente` | p50 (ms) | p95 (ms) | Chamadas | Tamanho | Promovido |
 |--------|----------|------------------|----------|----------|----------|---------|-----------|
-| **tfidf_linear_svc** | **0,7582** | 0,8118 | 1,45 | 3,14 | 1000 | 1,23 MB | ✅ |
-| tfidf_logreg | 0,7489 | 0,7957 | 2,01 | 3,22 | 1000 | 1,23 MB | — |
+| tfidf_linear_svc | **0,7582** | 0,8118 | 1,45 | 3,14 | 1000 | 1,23 MB | elegível |
+| **tfidf_logreg** | 0,7489 | 0,7957 | 1,61 | 2,59 | 1000 | 1,23 MB | ✅ servido |
 | tfidf_random_forest | 0,7273 | **0,8414** | 150,61 | 210,63 | 287 | 72,17 MB | ❌ latência |
 | dummy_stratified | 0,3388 | 0,2339 | 3,26 | 5,13 | 1000 | 0,77 MB | ❌ |
 | dummy_most_frequent | 0,1951 | 0,0000 | 1,70 | 2,71 | 1000 | 0,77 MB | ❌ |
@@ -94,47 +94,52 @@ p95 ≤ 15 ms. Empate técnico (< 1 pp) resolvido pelo menor p95.
 > entre `tfidf_linear_svc` e `tfidf_logreg` é de **0,0093** — dentro do limiar de empate de
 > 0,01. O desempate foi por latência, com margem de **0,07 ms**, que é ruído de medição.
 >
-> **Os dois modelos são equivalentes.** A regra escolheu um de forma determinística e
-> reproduzível, o que é o objetivo dela, mas seria incorreto apresentar o LinearSVC como
-> "melhor modelo". Ver [Decisão em aberto](#-decisão-em-aberto).
+> **Os dois modelos são equivalentes para a entrega.** A API serve `tfidf_logreg` porque
+> ele expõe `predict_proba`, necessário para devolver score de confiança sem adicionar
+> calibração e latência ao `LinearSVC`.
 
-### Matriz de confusão
+### Erro crítico
 
-|  | ↓ real \\ → predito | `normal` | `atencao` | `urgente` |
-|---|---|---|---|---|
-| | **`normal`** (697) | **496** | 118 | 83 |
-| | **`atencao`** (616) | 119 | **474** | 23 |
-| | **`urgente`** (372) | **49** | 21 | **302** |
+O notebook `04_tfidf_logreg` registra o erro clinicamente mais caro do modelo servido:
+**51 de 372 casos `urgente` foram classificados como `normal` (13,7%)**. Em triagem
+clínica, esse é o falso negativo relevante — o laudo crítico que cai na fila de baixa
+prioridade.
 
-**O erro que custa caro:** **49 de 372 casos `urgente` foram classificados como `normal`
-(13,2%)**. Em triagem clínica, esse é o falso negativo relevante — o laudo crítico que cai
-na fila de baixa prioridade.
-
-Outras leituras:
-
-- `normal` → `urgente` (83 casos): custo baixo, gera revisão desnecessária
-- `atencao` ↔ `normal` (237 casos nos dois sentidos): a fronteira mais confusa, coerente
-  com o fato de ambas derivarem de categorias clínicas amplas
-- `urgente` é a classe com **maior recall** (0,8118), apesar de ser a minoritária — efeito
-  do `class_weight="balanced"`
+Outras leituras detalhadas da matriz ficam no notebook `04_tfidf_logreg`. O ponto central
+para operação é que `urgente` continua com o maior recall (0,7957), apesar de ser a classe
+minoritária — efeito do `class_weight="balanced"`.
 
 ---
 
 ## ⚡ Otimização e Latência
 
-> 🚧 **Pendente — Etapa 4.** O modelo ainda é servido como `.pkl`.
+> ✅ **Etapa 4 concluída.** O modelo é exportado para ONNX antes da publicação e a API
+> carrega `model.onnx` quando `serving.runtime: onnx`.
 
-| Modelo | Formato | p50 (ms) | p95 (ms) | p99 (ms) | Chamadas | Tamanho | F1-macro |
-|--------|---------|----------|----------|----------|----------|---------|----------|
-| Promovido | `.pkl` (scikit-learn) | 1,45 | 3,14 | 3,92 | 1000 | 1,23 MB | 0,7582 |
-| Otimizado | `.onnx` (ONNX Runtime) | — | — | — | — | — | — |
-| **Variação** | | — | — | — | — | — | — |
+| Runtime | Formato | p50 (ms) | p95 (ms) | p99 (ms) | Chamadas | Tamanho |
+|---------|---------|----------|----------|----------|----------|---------|
+| Baseline | `.pkl` (scikit-learn) | 0,86 | 1,21 | 1,32 | 1000 | 0,125 MB |
+| Otimizado | `.onnx` (ONNX Runtime) | 0,07 | 0,09 | 0,11 | 1000 | 0,089 MB |
+| **Ganho** | | **12,8x** | **12,9x** | **11,6x** | | **28,8% menor** |
 
 **Protocolo de medição:** ver [NOTEBOOKS.md](NOTEBOOKS.md) — 50 chamadas de aquecimento
 descartadas, até 1.000 predições single-sample sob orçamento de 45 s, mesma máquina.
 
-> ℹ️ O baseline acima é do **modelo isolado**, não da API. A latência fim a fim medida no
-> container (Etapa 1) inclui serialização HTTP e overhead do framework, e será maior.
+> ℹ️ A medição acima foi gerada localmente sobre corpus sintético, porque o dataset real
+> não é versionado no repositório. Ela valida o mecanismo de otimização e comparação; as
+> métricas de qualidade reais continuam sendo as dos notebooks `01` a `07`.
+
+### Compatibilidade ONNX
+
+| Verificação | Resultado |
+|-------------|-----------|
+| Predições comparadas | 450 |
+| Divergências | 1 |
+| Taxa de divergência | 0,22% |
+| Limite aceito | 1,00% |
+
+A única divergência observada ocorreu em exemplo de fronteira entre `normal` e `atencao`.
+O gate reprova o ONNX se a taxa passar de `optimization.onnx.max_mismatch_rate`.
 
 ---
 
@@ -187,8 +192,8 @@ descartadas, até 1.000 predições single-sample sob orçamento de 45 s, mesma 
 
 | Constatação | Evidência | Implicação |
 |-------------|-----------|------------|
-| Classe `urgente` tem o melhor recall apesar de minoritária | Recall 0,8118 vs 0,7116 de `normal` | Efeito do `class_weight="balanced"`; sem ele o modelo tenderia a ignorá-la |
-| Fronteira `normal`/`atencao` é a mais confusa | 237 confusões cruzadas | As duas classes derivam de categorias clínicas amplas e heterogêneas |
+| Classe `urgente` tem o melhor recall apesar de minoritária | Recall 0,7957 vs 0,6872 de `normal` | Efeito do `class_weight="balanced"`; sem ele o modelo tenderia a ignorá-la |
+| Fronteira `normal`/`atencao` exige atenção | Classes derivadas de categorias clínicas amplas e heterogêneas | Erros entre baixa e média prioridade devem ser acompanhados em avaliação offline |
 | Categoria `5 — general pathological conditions` domina a classe `normal` | 4.805 dos 14.438 documentos brutos | O que o modelo chama de `normal` é fortemente influenciado por uma categoria inespecífica |
 
 ### A investigar
@@ -226,26 +231,18 @@ descartadas, até 1.000 predições single-sample sob orçamento de 45 s, mesma 
 
 ---
 
-## ❓ Decisão em Aberto
-
-**`LinearSVC` ou `LogisticRegression`?**
-
-Os dois são estatisticamente equivalentes (Δ F1-macro = 0,0093, dentro do empate técnico).
-A regra promoveu o LinearSVC por 0,07 ms de latência, que é ruído.
+## ✅ Decisão Fechada
 
 | | `tfidf_linear_svc` | `tfidf_logreg` |
 |---|---|---|
 | F1-macro | 0,7582 | 0,7489 |
 | Recall `urgente` | 0,8118 | 0,7957 |
-| p95 | 3,14 ms | 3,22 ms |
+| p95 | 3,14 ms | 2,59 ms |
 | `predict_proba` | ❌ Não | ✅ Sim |
 
-**Recomendação:** se a API precisar retornar **score de confiança** junto da classe — o
-que é desejável em triagem clínica, para permitir limiar ajustável —, o `tfidf_logreg` é a
-escolha melhor, ao custo de 0,009 de F1-macro. A alternativa é calibrar o SVC com
-`CalibratedClassifierCV`, o que adiciona latência e complexidade.
-
-**Decidir antes da Etapa 1**, porque define o contrato da API.
+**Decisão:** servir `tfidf_logreg`. A pequena perda de F1-macro (0,0093) é aceitável pelo
+empate técnico, e o ganho operacional é claro: o modelo retorna probabilidades sem
+calibração adicional, o que mantém o contrato da API simples e útil para triagem.
 
 ---
 

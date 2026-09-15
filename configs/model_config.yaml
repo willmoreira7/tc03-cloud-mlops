@@ -40,6 +40,13 @@ classes:
 # devolver score de confianca. Ver ADR 10 em docs/ARQUITETURA.md.
 serving:
   model: tfidf_logreg
+  runtime: onnx
+
+optimization:
+  onnx:
+    # ONNX Runtime usa precisao simples em partes do grafo. Casos exatamente na
+    # fronteira podem trocar de classe; acima de 1% deixa de ser otimizacao.
+    max_mismatch_rate: 0.01
 
 # Restricoes do criterio de promocao (docs/NOTEBOOKS.md).
 promotion:
