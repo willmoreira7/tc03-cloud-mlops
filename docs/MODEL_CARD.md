@@ -216,7 +216,7 @@ descartadas, até 1.000 predições single-sample sob orçamento de 45 s, mesma 
 | Sinal | Onde é observado |
 |-------|------------------|
 | Latência p50/p95/p99 | Painel Grafana — Etapa 3 |
-| Taxa de erro 5xx | Painel Grafana |
+| Taxa de erro HTTP 4xx/5xx | Painel Grafana |
 | Distribuição das classes preditas | Painel Grafana — desvio indica drift de entrada |
 | Qualidade do modelo | Reavaliação no retreino (DAG do Airflow) |
 

@@ -15,6 +15,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
+from src.api.metrics import install_metrics, record_prediction, set_model_info
 from src.api.model import ModelNotLoadedError, get_classifier
 from src.api.schemas import (
     ErrorResponse,
@@ -36,6 +37,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """
     classifier = get_classifier()
     classifier.load()
+    set_model_info(name=classifier.name, version=APP_VERSION)
     yield
 
 
@@ -50,6 +52,8 @@ app = FastAPI(
     version=APP_VERSION,
     lifespan=lifespan,
 )
+
+install_metrics(app)
 
 
 @app.exception_handler(RequestValidationError)
@@ -121,4 +125,5 @@ async def predict(payload: PredictRequest) -> PredictResponse:
         Predicted class, per-class probabilities and server-side latency.
     """
     resultado = get_classifier().predict(payload.texto)
+    record_prediction(resultado["urgencia"])
     return PredictResponse(**resultado)
