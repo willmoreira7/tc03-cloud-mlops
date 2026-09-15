@@ -48,7 +48,7 @@ Conferência item a item do que o enunciado exige.
 |---------|-----------|--------|
 | CI/CD com ≥ 2 automações | lint + testes | ✅ 5 jobs: lint, testes, build, DAG, commitlint |
 | DAG Airflow funcional | dados → treino → salvamento | ✅ Executada de ponta a ponta no CI |
-| Dashboard Grafana | ≥ 3 painéis | ✅ Etapa 3 (4 painéis) |
+| Dashboard Grafana | ≥ 3 painéis | ✅ Etapa 3 (8 painéis) |
 | Otimização de performance | ≥ 1 técnica (ONNX, quantização ou pruning) | ⬜ Etapa 4 |
 
 ### Dataset
@@ -253,10 +253,14 @@ mas afeta tempo de build e de deploy.
 
 | # | Painel | Métrica base |
 |---|--------|-------------|
-| 1 | Total de requisições | `Counter` por rota e status |
+| 1 | Inferências no período | `Counter` filtrado em `endpoint="/predict"` |
 | 2 | Latência de resposta | `Histogram` — p50 / p95 / p99 |
 | 3 | Taxa de erro HTTP | Proporção de respostas `4xx`/`5xx` |
-| 4 | _(extra)_ Distribuição das classes preditas | `Counter` por classe |
+| 4 | Taxa de sucesso | `Counter` filtrado por status `2xx` |
+| 5 | Dentro do SLO (500ms) | `Histogram` bucket `le="0.5"` |
+| 6 | Inferências por minuto | `Counter` como rate |
+| 7 | Status HTTP por minuto | `Counter` por status |
+| 8 | _(extra)_ Distribuição das classes preditas | `Counter` por classe |
 
 ### 📦 Entregável
 
@@ -274,7 +278,7 @@ Docker Compose rodando a stack completa + print/JSON do dashboard.
 | Configuração do Prometheus | [`monitoring/prometheus/prometheus.yml`](../monitoring/prometheus/prometheus.yml) |
 | Regras de alerta (RED) | [`monitoring/prometheus/rules/triagem.yml`](../monitoring/prometheus/rules/triagem.yml) |
 | Provisionamento Grafana | [`monitoring/grafana/provisioning/`](../monitoring/grafana/provisioning/) |
-| Dashboard (4 painéis) | [`monitoring/grafana/dashboards/triagem-laudos.json`](../monitoring/grafana/dashboards/triagem-laudos.json) |
+| Dashboard (8 painéis) | [`monitoring/grafana/dashboards/triagem-laudos.json`](../monitoring/grafana/dashboards/triagem-laudos.json) |
 | Guia de validação | [`docs/MONITORING.md`](MONITORING.md) |
 | Stack Compose | [`docker-compose.yml`](../docker-compose.yml) |
 | Carga sintética | [`scripts/generate_load.py`](../scripts/generate_load.py) |
