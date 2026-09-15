@@ -148,10 +148,11 @@ carrega um artefato pronto — isso mantém o serviço leve e o tempo de startup
    │  Prometheus           │ ───► │  Grafana     │
    └───────────────────────┘      └──────────────┘
 
-   ┌───────────────────────────────────────────────┐
-   │  Job em container / Airflow — retreino agendado│
-   │  ingest → preprocess → train → evaluate → publish│
-   └───────────────────┬───────────────────────────┘
+   ┌──────────────────────────────────────────────────────┐
+   │  Job em container / Airflow — retreino agendado      │
+   │  ingest → preprocess → train → evaluate →            │
+   │  export_onnx → publish                               │
+   └───────────────────┬──────────────────────────────────┘
                        ▼
               Artefato de modelo (S3)
 ```
@@ -182,6 +183,25 @@ carrega um artefato pronto — isso mantém o serviço leve e o tempo de startup
 | 14 | Airflow em imagem e compose próprios, fora do `pyproject.toml` | ✅ Aceita | Evita conflito de dependências com a API; libs de treino fixadas pelo `uv.lock` para o pickle ser compatível |
 | 15 | CI treina sobre corpus sintético | ✅ Aceita | O dataset real não é versionado; o CI valida o pipeline, não a qualidade do modelo |
 | 16 | Demonstração no EKS do laboratório, imagem da API no Docker Hub com modelo embutido | ✅ Aceita | O cluster já existia com Airflow, Prometheus e Grafana; publicar a API ali mostra a stack completa na nuvem sem provisionar EC2. Não substitui a ADR 02 como alvo de produção, e o retreino no cluster não atualiza a imagem |
+| 17 | Modelo servido é o **ONNX**, com gate de equivalência antes de publicar | ✅ Aceita | A otimização não pode alterar a decisão clínica: o pipeline reprova o ONNX se divergir do `.pkl` acima de `optimization.onnx.max_mismatch_rate` **ou** se o próprio ONNX violar as restrições de promoção (ADR 13) |
+
+> ℹ️ **Sobre a ADR 16 — qual ambiente reproduzir.** O projeto tem dois ambientes, com
+> papéis distintos, e nenhum substitui o outro:
+>
+> | | Docker Compose | EKS (`helm/`) |
+> |---|---|---|
+> | Papel | Entregável reproduzível do enunciado | Ambiente publicado de demonstração |
+> | Como subir | Comandos do [README](../README.md) | `helm upgrade --install` + `kubectl apply -f helm/triagem-api.yaml` |
+> | Avaliado | Sim — é o que o PDF pede | Não, mas é onde a stack está no ar |
+>
+> Para **reproduzir** o projeto, siga apenas os comandos do README: nada no CI, na imagem
+> construída pelo `Dockerfile` ou nos testes depende de `helm/`.
+
+> ⚠️ **Credenciais do ambiente publicado.** O README expõe usuário e senha de Airflow e
+> Grafana. É uma escolha deliberada de laboratório acadêmico, registrada aqui para que não
+> seja lida como vazamento acidental. Duas ressalvas técnicas: o repositório é público, e a
+> UI do Airflow permite executar código arbitrário no cluster. Se o ambiente sobreviver à
+> entrega, o caminho é trocar as senhas e movê-las para um secret.
 
 > ℹ️ **Sobre a ADR 10.** A regra de promoção elegeu o `tfidf_linear_svc`, mas a
 > diferença para o `tfidf_logreg` é de 0,0093 em F1-macro — dentro do limiar de empate

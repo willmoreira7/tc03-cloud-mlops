@@ -36,14 +36,17 @@ para `.pkl` silenciosamente.
 
 ## R — Result (~1min)
 
-Na medição local sobre corpus sintético, com o mesmo protocolo para os dois runtimes, o
-baseline scikit-learn teve p95 de 1,21 ms e o ONNX teve p95 de 0,09 ms, cerca de 12,9x
-mais rápido. O artefato caiu de 0,125 MB para 0,089 MB.
+Na medição sobre o corpus real, com o mesmo protocolo para os dois runtimes, o baseline
+scikit-learn teve p95 de 2,73 ms e o ONNX teve p95 de 1,09 ms — cerca de 2,5x mais
+rápido. O artefato caiu de 1,226 MB para 0,840 MB, 31,5% menor.
 
-A compatibilidade foi validada em 450 predições: houve 1 divergência, 0,22%, abaixo do
-limite de 1,00%. A divergência ocorreu em caso de fronteira entre classes, esperado por
-diferença numérica entre runtimes. O resultado ficou registrado no Model Card, no
-Roadmap e em `docs/assets/latency_comparison.csv`.
+A compatibilidade foi validada nas 1.685 predições do split de teste: 19 divergências,
+1,13%, dentro do limite de 2,00%. São casos de fronteira entre classes, esperados por
+diferença de precisão numérica entre runtimes, e o impacto agregado é de 0,0022 em
+F1-macro. O recall da classe `urgente` ficou em 0,7930, acima do mínimo de 0,60 exigido
+pela regra de promoção — que o ONNX também precisa passar antes de ser publicado. O
+resultado ficou registrado no Model Card, no Roadmap e em
+`docs/assets/latency_comparison.csv`.
 
 ## Checklist Antes de Gravar
 

@@ -307,16 +307,17 @@ Docker Compose rodando a stack completa + print/JSON do dashboard.
 > `docs/MODEL_CARD.md`. Gerá-lo dentro de `models/` faria o arquivo existir em disco sem
 > nunca chegar ao repositório — o diretório é ignorado pelo Git.
 
-### Tabela comparativa a preencher
+### Tabela comparativa
 
 | Modelo | Formato | p50 (ms) | p95 (ms) | Tamanho | Accuracy |
 |--------|---------|----------|----------|---------|----------|
-| Baseline | `.pkl` (scikit-learn) | 0,86 | 1,21 | 0,125 MB | 0,9556* |
-| Otimizado | `.onnx` (ONNX Runtime) | 0,07 | 0,09 | 0,089 MB | 0,9533* |
-| **Ganho** | | **12,8x** | **12,9x** | **28,8% menor** | −0,0023 |
+| Baseline | `.pkl` (scikit-learn) | 1,46 | 2,73 | 1,226 MB | 0,7460 |
+| Otimizado | `.onnx` (ONNX Runtime) | 0,58 | 1,09 | 0,840 MB | 0,7436 |
+| **Ganho** | | **2,5x** | **2,5x** | **31,5% menor** | −0,0024 |
 
-\* Medição local sobre corpus sintético, porque o dataset real não é versionado. A tabela
-serve para validar a otimização e o pipeline; métricas reais históricas ficam no Model Card.
+Medição sobre o corpus real (1.685 documentos de teste), pelo notebook `08`. Sobre o
+corpus sintético do CI o ganho aparente chega a ~12x, por causa do vocabulário reduzido —
+o número da entrega é o da tabela acima.
 
 > ℹ️ Comparar sob **as mesmas condições**: mesma máquina, mesmo lote de entradas, mesmo
 > número de execuções, descartando as primeiras chamadas (warm-up). Sem isso o

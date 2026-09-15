@@ -54,7 +54,7 @@ optimization:
     # quebrada, que divergiria em ordem de grandeza maior.
     #
     # A garantia clinica nao vem deste numero e sim do gate seguinte: o ONNX
-    # tambem precisa passar nas restricoes de `promotion` (ADR 16).
+    # tambem precisa passar nas restricoes de `promotion` (ADR 17).
     max_mismatch_rate: 0.02
 
 # Restricoes do criterio de promocao (docs/NOTEBOOKS.md).
