@@ -175,8 +175,6 @@ data/
 | Não incluir dados de paciente identificáveis | Mesmo em dataset público, é boa prática |
 | Registrar a licença de uso do dataset | Exigência de dados abertos |
 
-> ⚠️ Adicionar `data/` ao [.gitignore](../.gitignore) — ainda **não está** listado lá.
-
 ---
 
 ## ✂️ Divisão dos Dados
@@ -192,4 +190,4 @@ critério da disciplina (Aula 06 — Reprodutibilidade e Qualidade do Código).
 
 ---
 
-**Última atualização:** 2026-09-05
+**Última atualização:** 2026-09-15
