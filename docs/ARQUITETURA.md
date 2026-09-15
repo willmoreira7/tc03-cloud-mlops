@@ -174,13 +174,14 @@ carrega um artefato pronto — isso mantém o serviço leve e o tempo de startup
 | 06 | Modelo de produção escolhido por comparação em notebooks | ✅ Aceita | Decisão auditável e reproduzível |
 | 07 | Regra de promoção centralizada em `src/evaluation/promotion.py` | ✅ Aceita | Notebook e DAG compartilham restrições; a API serve explicitamente o modelo configurado |
 | 08 | **Não** usar MLflow nesta fase | 🟡 Proposta | Não exigido pelo PDF; reavaliar após Etapas 1–3 |
-| 09 | **Não** usar DVC, Kubernetes ou Terraform | ✅ Aceita | Fora do escopo do enunciado |
+| 09 | **Não** usar DVC, Kubernetes ou Terraform na arquitetura alvo | ✅ Aceita | Fora do escopo do enunciado; o EKS da ADR 16 é só ambiente de demonstração |
 | 10 | API serve `tfidf_logreg`, não o promovido `tfidf_linear_svc` | ✅ Aceita | Empate técnico entre os dois; o LogReg expõe `predict_proba` e permite score de confiança |
 | 11 | Notebooks versionados **com** as saídas; sem `nbstripout` | ✅ Aceita | Quem clona vê o resultado da análise sem executar nada. Reavaliar se o corpus passar a ter dado clínico real |
 | 12 | `nbqa` roda o `ruff` nos notebooks | ✅ Aceita | O código da análise não pode ser a única parte do projeto sem lint |
 | 13 | Retreino passa por **quality gate** antes de publicar | ✅ Aceita | Um modelo que não seria promovido na análise não pode chegar à API só porque o job rodou; o gate reusa `promotion.py` |
 | 14 | Airflow em imagem e compose próprios, fora do `pyproject.toml` | ✅ Aceita | Evita conflito de dependências com a API; libs de treino fixadas pelo `uv.lock` para o pickle ser compatível |
 | 15 | CI treina sobre corpus sintético | ✅ Aceita | O dataset real não é versionado; o CI valida o pipeline, não a qualidade do modelo |
+| 16 | Demonstração no EKS do laboratório, imagem da API no Docker Hub com modelo embutido | ✅ Aceita | O cluster já existia com Airflow, Prometheus e Grafana; publicar a API ali mostra a stack completa na nuvem sem provisionar EC2. Não substitui a ADR 02 como alvo de produção, e o retreino no cluster não atualiza a imagem |
 
 > ℹ️ **Sobre a ADR 10.** A regra de promoção elegeu o `tfidf_linear_svc`, mas a
 > diferença para o `tfidf_logreg` é de 0,0093 em F1-macro — dentro do limiar de empate
